@@ -2,7 +2,7 @@ import re
 import os
 import cv2 as cv
 import numpy as np
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
 
 # GET COLOR MAGNITUDE FROM PIXEL
 def getColorMagnitude(pixel):
@@ -49,14 +49,30 @@ def getDelta(imgs, x, y, t):
 
 #def temporalLocation():
 
-path = "./"
+path = "./" # Should path be an input?
 imgs, calib = [], []
 ytop = int(input('enter ytop: '))
 ybottom = int(input('enter ybottom: '))
+
+# READING FILES IN PATH
 for files in os.scandir(path):
     if files.name.rfind(".png"):
         if re.match('lamp_calibration_*', files.name):
             calib.append(cv.imread(files.name, cv.IMREAD_GRAYSCALE))
         else:
             imgs.append(cv.imread(files.name, cv.IMREAD_GRAYSCALE))
-print(getMinMag(imgs))
+
+# EXTRACTING EDGES FOR POSTERIOR SHADOW/LOCATION MAPPING
+cannyImgs = []
+for img in imgs:
+    cannyImgs.append(cv.Canny(img,100,200))
+
+# DEBUG
+window = plt.figure(figsize=(8,4))
+window.add_subplot(121)
+plt.imshow(imgs[0])
+
+window.add_subplot(122)
+plt.imshow(cannyImgs[0], cmap='gray')
+
+plt.show()
