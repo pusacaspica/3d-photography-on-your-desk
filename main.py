@@ -1,8 +1,11 @@
+import sys
 import re
 import os
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
+
+np.set_printoptions(threshold=sys.maxsize)
 
 # GET COLOR MAGNITUDE FROM PIXEL
 def getColorMagnitude(pixel):
@@ -13,16 +16,21 @@ def getPx(imgs, x, y, t):
     return imgs[t].item(y, x)
 
 def getPxMax(imgs, x, y):
+    #debug = np.ndarray(imgs[0].shape, dtype=np.uint8)
+    #debugre = np.array([debug])
+    #debugre[0, 0:imgs[0].shape[0], 0:imgs[0].shape[1]] = np.max(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])])
+    #print(len(debugre[0]))
     return np.max(imgs[:][0].item(y,x))
 
 def getPxMin(imgs, x, y):
+    #np.min(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])])
     return np.min(imgs[:][0].item(y,x))
 
 def getPxShadow(imgs, x, y):
     return (int(getPxMax(imgs, x, y)) + int(getPxMin(imgs, x, y)))//2
 
 def getPxDelta(imgs, x, y, t):
-    return int(imgs[t].item(x,y) - getPxShadow(imgs, x, y))
+    return int(imgs[t].item(y,x) - getPxShadow(imgs, x, y))
 
 # GET SPECIFIC t-NTH IMAGE
 def getImg(imgs, t):
@@ -49,18 +57,21 @@ def spatialLocation(imgs, ytop, ybottom):
     spatial = []
     for img in imgs:
         topContour = np.nonzero(img[:][ytop])[0].ravel()[0]
+        #print(topContour)
         bottomContour = np.nonzero(img[:][ybottom])[0].ravel()[0]
+        #print(bottomContour)
         spatial.append((topContour, bottomContour))
     return spatial
 
-# RETURN TUPLES OF LOCAL DELTA AND TIME
-def shadowTime(imgs, x, y):
-    deltaTime = []
-    for time, img in enumerate(imgs):
-        localTime = time
-        localDelta =  getPxDelta(imgs, x, y, time)
-        deltaTime.append((localDelta, localTime))
-    return deltaTime
+# RETURN TUPLES OF LOCAL DELTA AND TIME IN SINGLE FRAME
+def shadowTime(imgs, x, y, thresh):
+    deltaTime = -1
+    for i, img in enumerate(imgs):
+        if (abs(img.item(y,x) - ((getPxMin(imgs, x, y) + getPxMax(imgs, x, y))//2))) > thresh:
+            if deltaTime == -1:
+                deltaTime = i
+                break
+    return int(deltaTime)
 
 # RUNS THROUGH EVERY SINGLE FRAME
 # CALCULATES DELTA WITH THE IMAGE SHADOW (min+max/2)
@@ -68,27 +79,24 @@ def shadowTime(imgs, x, y):
 # NOT QUITE THERE YET, THE IDEA IS TO INPUT A FRAME AND GET A TIME BACK
 def shadowTimeOpt(imgs):
     timeslices = []
-    for i, img in enumerate(imgs):
+    for img in imgs:
         deltaTime = np.ndarray(img.shape, dtype=np.uint8)
         deltaTime[0:img.shape[0], 0:img.shape[1]] = img[0:img.shape[0], 0:img.shape[1]] - (np.max(img[0:img.shape[0], 0:img.shape[1]]) + np.min(img[0:img.shape[0], 0:img.shape[1]]))//2
         timeslices.append(deltaTime)
     return timeslices
 
-# EVERY FRAME ALL THE TIME
-# EACH FRAME WILL HAVE FROM 0 TO 4 INFORMATION:
-# 0 INFO -> SHADOW DOESN'T MOVE NOR CHANGE AT ANY GIVEN TIME
-# 4 INFO -> SHADOW MOVES IN AND MOVES OUT OF THE FRAME
-# THE STORED INFORMATION IS THE TIME IN WHICH STUFF COMES IN AND OUT
-# AND THE INTENSITIES OF SAID FRAMES
-#[t_in color_in t_out color_out]
-#def temporalLocation(imgs, x, y):
-#    frames = np.zeros_like(imgs[0])
-#    for indexes, img in enumerate(imgs):
-#    return frames
+# PAINTS EVERY FRAME TAKING PIXEL DEPTH IN CONSIDERATION
+# IF IT PAINTS IN bottom, FRAME DOESN'T CONTRIBUTE TO DEPTH
+def shadowTimeImg(imgs, thresh, bottom):
+    timeslice = np.ndarray(imgs[0].shape, dtype=np.uint8)
+    timeslices = np.array([timeslice]*50)
+    timeslices[0:len(imgs), 0:imgs[0].shape[0], 0:imgs[0].shape[1]] = np.where(abs(np.array(imgs[0:len(imgs)])[0:imgs[0].shape[0], 0:imgs[0].shape[1]] - (np.max(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])]) + np.min(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])])//2)) > thresh, np.array(imgs[0:len(imgs)])[0:imgs[0].shape[0], 0:imgs[0].shape[1]] - (np.max(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])]) + np.min(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])])//[2])[0], bottom)
+    return timeslices[1]
 
 # PROGRAM START
 path = "./" # Should path be an input?
 imgs, calib = [], []
+maxs,  mins = [], []
 spatial, temporal = [], []
 ytop = int(input('enter ytop: '))
 ybottom = int(input('enter ybottom: '))
@@ -98,18 +106,23 @@ thresh = int(input('enter contrast threshold: '))
 for files in os.scandir(path):
     if files.name.rfind(".png"):
         if re.match('lamp_calibration_*', files.name):
+            #print(files.name)
             calib.append(cv.imread(files.name, cv.IMREAD_GRAYSCALE))
-        elif re.match('000*', files.name):
+        elif re.match('00*', files.name):
+            print(files.name)
             imgs.append(cv.imread(files.name, cv.IMREAD_GRAYSCALE))
+        else:
+            continue
 # EXTRACTING EDGES FOR POSTERIOR TEMPORAL/LOCATION SHADOW MAPPING
 cannyImgs = []
 for img in imgs:
     cannyImgs.append(cv.Canny(img,85,255))
+cannyImgs = np.array(cannyImgs)
 
 # SPATIAL SHADOW LOCATION
 # DETECT SHADOW BEHAVIOUR ON PLANE
 spatial = spatialLocation(cannyImgs, ytop, ybottom)
-print(spatial)
+#print(spatial)
 
 chosenFrames = {}
 #for pairing in spatial:
@@ -132,10 +145,17 @@ chosenFrames = {}
 #for i in range(imgs[0].shape[0]):
 #    for j in range(ytop,ybottom):
 #        temporal.append(shadowTime(imgs, range(img.shape[0])[0], range(img.shape[1])[0]))
-temporal = shadowTimeOpt(imgs)
-
+temporal = shadowTimeImg(imgs, thresh, -5)
 #print(chosenFrames)
-print(temporal)
+#print(temporal)
+
+#f = open("temporal.txt", "a")
+#f.write(str(temporal))
+#f.close()
+
+#allFrames = shadowTimeImg(imgs, thresh)
+#print(allFrames)
+#getPxMax(imgs, 0, 0)
 
 # DEBUG
 window = plt.figure(figsize=(8,4))
@@ -146,6 +166,6 @@ window.add_subplot(132)
 plt.imshow(cannyImgs[0], cmap='gray')
 
 window.add_subplot(133)
-plt.imshow(temporal[0], cmap='gray')
+plt.imshow(temporal, cmap='gray')
 
 plt.show()
