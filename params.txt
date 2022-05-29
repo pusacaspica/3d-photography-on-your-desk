@@ -1,0 +1,7 @@
+camera parameters: 
+ - transform vector: [0, 0, -57.571]
+ - rotation matrix: [ cos(y)cos(z), sin(x)sin(y)cos(z)-cos(x)sin(z), cos(x)sin(y)cos(z)-sin(x)sin(z) ]
+		    [ cos(y)sin(z), sin(x)sin(y)sin(z)-cos(x)cos(z), cos(x)sin(y)sin(z)-sin(x)cos(z) ]
+		    [ -sin(y),	    sin(x)cos(y),		     cos(x)cos(y)		     ],
+		    x = 42°, y = 0.545°, z = -89.8°
+ - focal length 50mm
