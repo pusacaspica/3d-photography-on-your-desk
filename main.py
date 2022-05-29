@@ -12,10 +12,6 @@ import matplotlib.pyplot as plt
 def getColorMagnitude(pixel):
     return (int(pixel[0]) + int(pixel[1]) + int(pixel[2]))//3
 
-# GET SPECIFIC PIXEL ON (x, y) POSITION FROM THE t-NTH IMAGE
-def getPx(imgs, x, y, t):
-    return imgs[t].item(y, x)
-
 def getPxMax(imgs, x, y):
     #np.max(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])])
     return np.max(imgs[:][0].item(y,x))
@@ -27,41 +23,8 @@ def getPxMin(imgs, x, y):
 def getPxShadow(imgs, x, y):
     return (int(getPxMax(imgs, x, y)) + int(getPxMin(imgs, x, y)))//2
 
-def getPxDelta(imgs, x, y, t):
-    return int(imgs[t].item(y,x) - getPxShadow(imgs, x, y))
-
-# GET MINIMAL AND MAXIMAL COLOR INTENSITIES IN GIVEN PIXEL
-# RETURNS NOT ONLY THE INTENSITIES, BUT THE IMAGES IN WHICH THE VALUES WERE RETRIEVED
-# I'm not sure why I wrote this one right here
-def optMin(imgs):
-    ret = index = np.ndarray((imgs[0].shape[0], imgs[0].shape[1]))
-    ret[0:ret.shape[0], 0:ret.shape[1]] = np.min(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]])
-    index[0:ret.shape[0], 0:ret.shape[1]] = np.argmin(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]], keepdims=True)
-    return ret, index
-
-def optMax(imgs):
-    ret = index = np.ndarray((imgs[0].shape[0], imgs[0].shape[1]))
-    ret[0:ret.shape[0], 0:ret.shape[1]] = np.max(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]])
-    index[0:ret.shape[0], 0:ret.shape[1]] = np.argmax(imgs[:, 0:imgs[0].shape[0], 0:imgs[0].shape[1]], axis=0)
-    return ret, index
-
-def optShadow(imgs):
-    ret = np.ndarray((imgs[0].shape[0], imgs[0].shape[1]))
-    ret = (optMin(imgs)[0] + optMax(imgs)[0])//2
-    return ret
-
-# PRINT THOSE FRAMES AT RANDOM, IT'S SO PRETTY
-def optDeltas(imgs):
-    deltas = np.ndarray((imgs.shape[0], imgs[0].shape[0], imgs[0].shape[1]))
-    for i, img in enumerate(imgs):
-        deltas[i, 0:img.shape[0], 0:img.shape[1]] = abs(imgs[i, 0:img.shape[0], 0:img.shape[1]] - (optShadow(imgs)))
-    return deltas
-
-def optShadowTime(imgs, deltas, thresh):
-    ret = np.zeros((imgs[0].shape[0], imgs[0].shape[1]))
-    ret[0:ret.shape[0], 0:ret.shape[1]] = np.where(optMax(deltas[0:imgs[0].shape[0], 0:imgs[0].shape[1]])[0] > thresh, optMax(deltas[:imgs[0].shape[0], 0:imgs[0].shape[1]])[1], -1)
-    return ret
-
+def delta(imgs, img, x, y):
+    return abs(img[y, x] - ((getPxMin(imgs, x, y) + getPxMax(imgs, x, y))//2))
 
 # GIVEN A SET OF CONTOUR IMAGES
 # AND A PAIR OF TOP AND BOTTOM Y POSITIONS
@@ -74,8 +37,6 @@ def spatialLocation(imgs, ytop, ybottom):
         spatial.append((topContour, bottomContour))
     return spatial
 
-def delta(imgs, img, x, y):
-    return abs(img[y, x] - ((getPxMin(imgs, x, y) + getPxMax(imgs, x, y))//2))
 
 # RETURN FRAME IN WHICH THE FRAME IS REACHED BY SHADOW
 # TIME -1 MEANS THAT IT IS OUT OF BOUNDS OF THE SCAN
@@ -111,6 +72,38 @@ def paintY(img, x):
 
 def paintX(img, x):
     img[0:img.shape[0], x] = 125
+    
+# OPTIMIZED VERSIONS OF THE METHODS ABOVE
+# Not working yet
+# Crucial if we're going to do this
+def optMin(imgs):
+    ret = index = np.ndarray((imgs[0].shape[0], imgs[0].shape[1]))
+    ret[0:ret.shape[0], 0:ret.shape[1]] = np.min(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]])
+    index[0:ret.shape[0], 0:ret.shape[1]] = np.argmin(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]], axis=0)
+    return ret, index
+
+def optMax(imgs):
+    ret = index = np.ndarray((imgs[0].shape[0], imgs[0].shape[1]))
+    ret[0:ret.shape[0], 0:ret.shape[1]] = np.max(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]])
+    index[0:ret.shape[0], 0:ret.shape[1]] = np.argmax(imgs[:, 0:imgs[0].shape[0], 0:imgs[0].shape[1]], axis=0)
+    return ret, index
+
+def optShadow(imgs):
+    ret = np.ndarray((imgs[0].shape[0], imgs[0].shape[1]))
+    ret = (optMin(imgs)[0] + optMax(imgs)[0])//2
+    return ret
+
+# PRINT THOSE FRAMES AT RANDOM, IT'S SO PRETTY
+def optDeltas(imgs):
+    deltas = np.ndarray((imgs.shape[0], imgs[0].shape[0], imgs[0].shape[1]))
+    for i, img in enumerate(imgs):
+        deltas[i, 0:img.shape[0], 0:img.shape[1]] = (imgs[i, 0:img.shape[0], 0:img.shape[1]] - (optShadow(imgs)))
+    return deltas
+
+def optShadowTime(imgs, deltas, thresh):
+    ret = np.zeros((imgs[0].shape[0], imgs[0].shape[1]))
+    ret[0:ret.shape[0], 0:ret.shape[1]] = np.where(optMax(deltas[0:imgs[0].shape[0], 0:imgs[0].shape[1]])[0] - optMin(deltas[0:imgs[0].shape[0], 0:imgs[0].shape[1]])[0] > thresh, optMax(deltas[:imgs[0].shape[0], 0:imgs[0].shape[1]])[1], -1)
+    return ret
 
 # PROGRAM START
 path = "./" # Should path be an input?
@@ -132,16 +125,26 @@ for files in os.scandir(path):
             imgs.append(cv.imread(files.name, cv.IMREAD_GRAYSCALE))
         else:
             continue
-imgs = np.array(imgs)
+
+'''imgs = np.array(imgs)
 print(str(imgs.shape))
 print(str(imgs[0].shape))
 calib = np.array(calib)
+shadows = optShadow(imgs)
 deltas = optDeltas(imgs)
-testMin = optMax(imgs)
-print(str(testMin[0].shape))
-print(str(testMin[1]))
-plt.imshow(testMin[0], cmap='gray')
-plt.show()
+maxes = optMax(imgs)
+
+window = plt.figure(figsize=(4,4))
+print(str(shadows.shape) + " " + str(deltas.shape))
+window.add_subplot(221)
+plt.imshow(maxes[0], cmap='gray')
+window.add_subplot(222)
+plt.imshow(maxes[1], cmap='gray')
+window.add_subplot(223)
+plt.imshow(shadows, cmap='gray')
+window.add_subplot(224)
+plt.imshow(deltas[1], cmap='gray')
+plt.show()'''
 
 sys.setrecursionlimit(max(imgs[0].shape))
 
@@ -154,23 +157,23 @@ cannyImgs = np.array(cannyImgs)
 # SPATIAL SHADOW LOCATION
 # DETECT SHADOW BEHAVIOUR ON PLANE
 spatial = spatialLocation(cannyImgs, ytop, ybottom)
-#print(spatial)
+print(spatial)
 
 #shadowTime = np.frompyfunc(shadowTime, 4, 1)
 #delta = np.frompyfunc(delta, 4, 1)
 
-time = shadowTime(imgs, 123, 505, thresh)
+time = shadowTime(imgs, 560, 650, thresh)
 print(time)
 
-paintX(imgs[49], 123)
-paintY(imgs[49], 505)
+paintX(imgs[time], 560)
+paintY(imgs[time], 650)
 
 window = plt.figure(figsize=(8,4))
 window.add_subplot(131)
-plt.imshow(imgs[48], cmap='gray')
+plt.imshow(imgs[time], cmap='gray')
 
 window.add_subplot(132)
-plt.imshow(imgs[49], cmap='gray')
+plt.imshow(imgs[time+1], cmap='gray')
 
 deltas = imageDelta(imgs, thresh, 255)
 
@@ -182,10 +185,10 @@ plt.imshow(deltas[0], cmap='gray')
 
 plt.show()
 
-plotPoints = optShadowTime(imgs, deltas, thresh)
+#plotPoints = optShadowTime(imgs, deltas, thresh)
 
-plt.imshow(plotPoints, cmap='gray')
-plt.show()
+#plt.imshow(plotPoints, cmap='gray')
+#plt.show()
 
 #window3d = plt.figure(figsize=(5, 4))
 #axes = plt.axes(projection="3d")
