@@ -78,13 +78,13 @@ def paintX(img, x):
 # Crucial if we're going to do this
 def optMin(imgs):
     ret = index = np.ndarray((imgs[0].shape[0], imgs[0].shape[1]))
-    ret[0:ret.shape[0], 0:ret.shape[1]] = np.min(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]])
+    ret[0:ret.shape[0], 0:ret.shape[1]] = np.min(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]], axis=0)
     index[0:ret.shape[0], 0:ret.shape[1]] = np.argmin(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]], axis=0)
     return ret, index
 
 def optMax(imgs):
     ret = index = np.ndarray((imgs[0].shape[0], imgs[0].shape[1]))
-    ret[0:ret.shape[0], 0:ret.shape[1]] = np.max(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]])
+    ret[0:ret.shape[0], 0:ret.shape[1]] = np.max(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]], axis = 0)
     index[0:ret.shape[0], 0:ret.shape[1]] = np.argmax(imgs[:, 0:imgs[0].shape[0], 0:imgs[0].shape[1]], axis=0)
     return ret, index
 
@@ -102,11 +102,11 @@ def optDeltas(imgs):
 
 def optShadowTime(imgs, deltas, thresh):
     ret = np.zeros((imgs[0].shape[0], imgs[0].shape[1]))
-    ret[0:ret.shape[0], 0:ret.shape[1]] = np.where(optMax(deltas[0:imgs[0].shape[0], 0:imgs[0].shape[1]])[0] - optMin(deltas[0:imgs[0].shape[0], 0:imgs[0].shape[1]])[0] > thresh, optMax(deltas[:imgs[0].shape[0], 0:imgs[0].shape[1]])[1], -1)
+    ret[0:ret.shape[0], 0:ret.shape[1]] = np.where(optMax(deltas[0:imgs[0].shape[0], 0:imgs[0].shape[1]])[0] - optMin(deltas[0:imgs[0].shape[0], 0:imgs[0].shape[1]])[0] > thresh, optMax(deltas)[1] + 1, 0)
     return ret
 
 # PROGRAM START
-path = "./" # Should path be an input?
+the_path = "./" # TRIED MAKING IT AN INPUT, DIDN'T WORK
 imgs, calib = [], []
 maxs,  mins = [], []
 spatial, temporal = [], []
@@ -115,7 +115,7 @@ ybottom = int(input('enter ybottom: '))
 thresh = int(input('enter contrast threshold: '))
 
 # READING FILES IN PATH
-for files in os.scandir(path):
+for files in os.scandir(the_path):
     if files.name.rfind(".png"):
         if re.match('lamp_calibration_*', files.name):
             #print(files.name)
@@ -126,25 +126,28 @@ for files in os.scandir(path):
         else:
             continue
 
-'''imgs = np.array(imgs)
+imgs = np.array(imgs)
 print(str(imgs.shape))
-print(str(imgs[0].shape))
 calib = np.array(calib)
 shadows = optShadow(imgs)
 deltas = optDeltas(imgs)
 maxes = optMax(imgs)
+print(str(maxes[0].shape))
+shadowTime = optShadowTime(imgs, deltas, thresh)
 
 window = plt.figure(figsize=(4,4))
 print(str(shadows.shape) + " " + str(deltas.shape))
-window.add_subplot(221)
+window.add_subplot(331)
 plt.imshow(maxes[0], cmap='gray')
-window.add_subplot(222)
+window.add_subplot(333)
 plt.imshow(maxes[1], cmap='gray')
-window.add_subplot(223)
+window.add_subplot(334)
 plt.imshow(shadows, cmap='gray')
-window.add_subplot(224)
+window.add_subplot(336)
 plt.imshow(deltas[1], cmap='gray')
-plt.show()'''
+window.add_subplot(338)
+plt.imshow(shadowTime, cmap='gray')
+plt.show()
 
 sys.setrecursionlimit(max(imgs[0].shape))
 
