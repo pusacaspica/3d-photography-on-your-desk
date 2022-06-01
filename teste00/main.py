@@ -78,14 +78,14 @@ def paintX(img, x):
 # Crucial if we're going to do this
 def optMin(imgs):
     ret = index = np.ndarray((imgs[0].shape[0], imgs[0].shape[1]))
-    ret[0:ret.shape[0], 0:ret.shape[1]] = np.min(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]], axis=0)
-    index[0:ret.shape[0], 0:ret.shape[1]] = np.argmin(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]], axis=0)
+    ret = np.min(imgs, axis=0)
+    index = np.argmin(imgs, axis=0)
     return ret, index
 
 def optMax(imgs):
     ret = index = np.ndarray((imgs[0].shape[0], imgs[0].shape[1]))
-    ret[0:ret.shape[0], 0:ret.shape[1]] = np.max(imgs[0:imgs[0].shape[0], 0:imgs[0].shape[1]], axis = 0)
-    index[0:ret.shape[0], 0:ret.shape[1]] = np.argmax(imgs[:, 0:imgs[0].shape[0], 0:imgs[0].shape[1]], axis=0)
+    ret = np.max(imgs, axis = 0)
+    index = np.argmax(imgs, axis=0)
     return ret, index
 
 def optShadow(imgs):
@@ -98,11 +98,11 @@ def optDeltas(imgs):
     deltas = np.ndarray((imgs.shape[0], imgs[0].shape[0], imgs[0].shape[1]))
     for i, img in enumerate(imgs):
         deltas[i, 0:img.shape[0], 0:img.shape[1]] = (imgs[i, 0:img.shape[0], 0:img.shape[1]] - (optShadow(imgs)))
-    return deltas
+    return optMax(deltas)
 
 def optShadowTime(imgs, deltas, thresh):
     ret = np.zeros((imgs[0].shape[0], imgs[0].shape[1]))
-    ret[0:ret.shape[0], 0:ret.shape[1]] = np.where(optMax(deltas[0:imgs[0].shape[0], 0:imgs[0].shape[1]])[0] - optMin(deltas[0:imgs[0].shape[0], 0:imgs[0].shape[1]])[0] > thresh, optMax(deltas)[1] + 1, 0)
+    ret = np.where(optMax(imgs)[0] - optMin(imgs)[0] > 30, np.where(deltas[0] > thresh, deltas[1] + 1, -1), -1)
     return ret
 
 # PROGRAM START
@@ -126,17 +126,17 @@ for files in os.scandir(the_path):
         else:
             continue
 
-imgs = np.array(imgs)
-print(str(imgs.shape))
+n_imgs = np.array(imgs)
+#print(str(n_imgs.shape))
 calib = np.array(calib)
-shadows = optShadow(imgs)
-deltas = optDeltas(imgs)
-maxes = optMax(imgs)
-print(str(maxes[0].shape))
-shadowTime = optShadowTime(imgs, deltas, thresh)
+shadows = optShadow(n_imgs)
+deltas = optDeltas(n_imgs)
+maxes = optMax(n_imgs)
+#print(str(maxes[0].shape))
+shadowTime = optShadowTime(n_imgs, deltas, thresh)
 
 window = plt.figure(figsize=(4,4))
-print(str(shadows.shape) + " " + str(deltas.shape))
+#print(str(shadows.shape) + " " + str(deltas[0].shape))
 window.add_subplot(331)
 plt.imshow(maxes[0], cmap='gray')
 window.add_subplot(333)
@@ -144,7 +144,7 @@ plt.imshow(maxes[1], cmap='gray')
 window.add_subplot(334)
 plt.imshow(shadows, cmap='gray')
 window.add_subplot(336)
-plt.imshow(deltas[1], cmap='gray')
+plt.imshow(deltas[0], cmap='gray')
 window.add_subplot(338)
 plt.imshow(shadowTime, cmap='gray')
 plt.show()
