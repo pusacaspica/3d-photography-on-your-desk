@@ -114,9 +114,18 @@ ytop = int(input('enter ytop: '))
 ybottom = int(input('enter ybottom: '))
 thresh = int(input('enter contrast threshold: '))
 
+# UNLESS I BOTHER TO IMPLEMENT A MORE ELEGANT SOLUTION
+# CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
+calibImgsCoordinates = [
+    [(492.76, 230.58, -38.839),(107, 467),(407.08, 230.58, 30.974),(40, 516)],
+    [(763.179, 295.08, -38.839),(36, 157),(677.37, 295.08, 30.974),(36, 157)],
+    [(501.84, -211.90, -38.839),(906, 451),(415.83, -211.90, 30.974),(967, 468)],
+    [(763.51, -220.34, -38.839),(848, 153),(677.27, -220.34, 30.974),(888, 152)]
+] # [ [ (SHADOW REAL WORLD COORDINATES) (SHADOW IMAGE COORDINATES) (OBJECT REAL WORLD COORDINATES) (OBJECT IMAGE COORDINATES)] ]
+
 # READING FILES IN PATH
 for files in os.scandir(the_path):
-    if files.name.rfind(".png"):
+    if files.name.rfind(".jpg"):
         if re.match('lamp_calibration_*', files.name):
             #print(files.name)
             calib.append(cv.imread(files.name, cv.IMREAD_GRAYSCALE))
@@ -126,30 +135,12 @@ for files in os.scandir(the_path):
         else:
             continue
 
-n_imgs = np.array(imgs)
-#print(str(n_imgs.shape))
+# CONVERTING IMGS TO NP.ARRAY
+imgs = np.array(imgs)
 calib = np.array(calib)
-shadows = optShadow(n_imgs)
-deltas = optDeltas(n_imgs)
-maxes = optMax(n_imgs)
-#print(str(maxes[0].shape))
-shadowTime = optShadowTime(n_imgs, deltas, thresh)
 
-window = plt.figure(figsize=(4,4))
-#print(str(shadows.shape) + " " + str(deltas[0].shape))
-window.add_subplot(331)
-plt.imshow(maxes[0], cmap='gray')
-window.add_subplot(333)
-plt.imshow(maxes[1], cmap='gray')
-window.add_subplot(334)
-plt.imshow(shadows, cmap='gray')
-window.add_subplot(336)
-plt.imshow(deltas[0], cmap='gray')
-window.add_subplot(338)
-plt.imshow(shadowTime, cmap='gray')
-plt.show()
-
-sys.setrecursionlimit(max(imgs[0].shape))
+# EXTENDING RECURSION LIMIT BECAUSE WE CAN
+sys.setrecursionlimit(imgs[0].shape[0])
 
 # EXTRACTING EDGES FOR POSTERIOR SPATIAL SHADOW MAPPING
 cannyImgs = []
@@ -162,36 +153,31 @@ cannyImgs = np.array(cannyImgs)
 spatial = spatialLocation(cannyImgs, ytop, ybottom)
 print(spatial)
 
-#shadowTime = np.frompyfunc(shadowTime, 4, 1)
-#delta = np.frompyfunc(delta, 4, 1)
+# EXTRACTING SHADOW AND DELTA FOR DEBUGGING PURPOSES
+#mins = optMin(imgs)
+#maxes = optMax(imgs)[0]
+#shadows = optShadow(imgs)
+deltas = optDeltas(imgs)
 
-time = shadowTime(imgs, 560, 650, thresh)
-print(time)
+# TEMPORAL SHADOW LOCATION
+# DETECT TIMESLICE IN WHICH FRAME IS TOUCHED BY MOVING SHADOW
+shadowTime = optShadowTime(imgs, deltas, thresh)
 
-paintX(imgs[time], 560)
-paintY(imgs[time], 650)
-
-window = plt.figure(figsize=(8,4))
-window.add_subplot(131)
-plt.imshow(imgs[time], cmap='gray')
-
-window.add_subplot(132)
-plt.imshow(imgs[time+1], cmap='gray')
-
-deltas = imageDelta(imgs, thresh, 255)
-
-paintX(deltas[31], 123)
-paintY(deltas[31], 505)
-
-window.add_subplot(133)
-plt.imshow(deltas[0], cmap='gray')
-
-plt.show()
-
-#plotPoints = optShadowTime(imgs, deltas, thresh)
-
-#plt.imshow(plotPoints, cmap='gray')
+# SHOW IMAGES
+#window = plt.figure(figsize=(4,4))
+#print(str(shadows.shape) + " " + str(deltas[0].shape))
+#window.add_subplot(221)
+#plt.imshow(shadows, cmap='gray')
+#window.add_subplot(222)
+#plt.imshow(deltas[0], cmap='gray')
+#window.add_subplot(224)
+#lt.imshow(shadowTime, cmap='gray')
 #plt.show()
+
+window3d = plt.figure(figsize=(7, 7))
+axes = plt.axes(projection="3d")
+axes.contourf3D(imgs[0,:,0], imgs[0,0,:], shadowTime)
+plt.show()
 
 #window3d = plt.figure(figsize=(5, 4))
 #axes = plt.axes(projection="3d")

@@ -1,0 +1,37 @@
+CAMERA WORLD POSITION: [0, 0, 57.5707 cm]
+CAMERA ROTATION: [42, 0.545, -89.8]
+
+LIGHT ROTATION: [-51, 0, 0]
+FOCAL LENGTH: 50mm
+
+frame01
+real coord.
+ - shadow: 49,276 cm, 23,058 cm, -3,8839 cm
+ - obj: 40,708 cm, 23,058 cm, 3,0974 cm
+img coord.
+ - shadow: 107x, 467y
+ - obj: x40, y516
+
+frame02
+real coord.
+ - shadow: 76,3179, 29,508, -3,8839
+ - obj: 67,737, 29,508, 3,0974
+img coord.
+ - shadow: 91x, 157y
+ - obj: 36x, 157y
+
+frame03
+real coord.
+ - shadow: 50,184 cm, -21,19 cm, -3,8839 cm
+ - obj: 41,583 cm, -21,19 cm, 3,0974 cm
+img coord.
+ - shadow: 906x, 451y
+ - obj: 967x, 468y
+
+frame04
+real coord.
+ - shadow: 76,351 cm, -22,034 cm, -3,8839cm
+ - obj: 67,727 cm, -22,034 cm, 3,0974 cm
+img coord.
+ - shadow: 848x, 153y
+ - obj: 888x, 152y
