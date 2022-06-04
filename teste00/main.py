@@ -74,7 +74,7 @@ def paintX(img, x):
     img[0:img.shape[0], x] = 125
     
 # OPTIMIZED VERSIONS OF THE METHODS ABOVE
-# Not working yet
+# Fully working now
 # Crucial if we're going to do this
 def optMin(imgs):
     ret = index = np.ndarray((imgs[0].shape[0], imgs[0].shape[1]))
@@ -114,15 +114,6 @@ ytop = int(input('enter ytop: '))
 ybottom = int(input('enter ybottom: '))
 thresh = int(input('enter contrast threshold: '))
 
-# UNLESS I BOTHER TO IMPLEMENT A MORE ELEGANT SOLUTION
-# CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
-calibImgsCoordinates = [
-    [(492.76, 230.58, -38.839),(107, 467),(407.08, 230.58, 30.974),(40, 516)],
-    [(763.179, 295.08, -38.839),(36, 157),(677.37, 295.08, 30.974),(36, 157)],
-    [(501.84, -211.90, -38.839),(906, 451),(415.83, -211.90, 30.974),(967, 468)],
-    [(763.51, -220.34, -38.839),(848, 153),(677.27, -220.34, 30.974),(888, 152)]
-] # [ [ (SHADOW REAL WORLD COORDINATES) (SHADOW IMAGE COORDINATES) (OBJECT REAL WORLD COORDINATES) (OBJECT IMAGE COORDINATES)] ]
-
 # READING FILES IN PATH
 for files in os.scandir(the_path):
     if files.name.rfind(".jpg"):
@@ -142,6 +133,24 @@ calib = np.array(calib)
 # EXTENDING RECURSION LIMIT BECAUSE WE CAN
 sys.setrecursionlimit(imgs[0].shape[0])
 
+# CAMERA CALIBRATION
+# UNLESS I BOTHER TO IMPLEMENT A MORE ELEGANT SOLUTION
+# LIGHT CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
+# HARDCODING CALIBRATION COORDINATES IS REALLY UNHEALTHY IN PYTHON
+imgPoints = [np.float32([[107, 467],[40, 516],
+            [36, 157],[36, 157],
+            [906, 451],[967, 468],
+            [848, 153],[888, 152]])]
+objPoints = [np.float32([[492.76, 230.58, 0.0],[407.08, 230.58, 0.0],
+            [763.179, 295.08, 0.0],[677.37, 295.08, 0.0],
+            [501.84, -211.90, 0.0],[415.83, -211.90, 0.0],
+            [763.51, -220.34, 0.0], [677.27, -220.34, 0.0]])]
+
+ret, cameraMatrix, distortionCoefficients, rotationVectors, transformVectors = cv.calibrateCamera(objPoints, imgPoints, calib.shape[1:3], None, None)
+print(type(ret))
+
+# SHADOW MAPPING
+
 # EXTRACTING EDGES FOR POSTERIOR SPATIAL SHADOW MAPPING
 cannyImgs = []
 for img in imgs:
@@ -154,9 +163,9 @@ spatial = spatialLocation(cannyImgs, ytop, ybottom)
 print(spatial)
 
 # EXTRACTING SHADOW AND DELTA FOR DEBUGGING PURPOSES
-#mins = optMin(imgs)
-#maxes = optMax(imgs)[0]
-#shadows = optShadow(imgs)
+mins = optMin(imgs)
+maxes = optMax(imgs)[0]
+shadows = optShadow(imgs)
 deltas = optDeltas(imgs)
 
 # TEMPORAL SHADOW LOCATION
@@ -164,19 +173,21 @@ deltas = optDeltas(imgs)
 shadowTime = optShadowTime(imgs, deltas, thresh)
 
 # SHOW IMAGES
-#window = plt.figure(figsize=(4,4))
-#print(str(shadows.shape) + " " + str(deltas[0].shape))
-#window.add_subplot(221)
-#plt.imshow(shadows, cmap='gray')
-#window.add_subplot(222)
-#plt.imshow(deltas[0], cmap='gray')
-#window.add_subplot(224)
-#lt.imshow(shadowTime, cmap='gray')
-#plt.show()
+window = plt.figure(figsize=(4,4))
+print(str(shadows.shape) + " " + str(deltas[0].shape))
+window.add_subplot(221)
+plt.imshow(shadows, cmap='gray')
+window.add_subplot(222)
+plt.imshow(deltas[0], cmap='gray')
+window.add_subplot(223)
+plt.imshow(maxes, cmap='gray')
+window.add_subplot(224)
+plt.imshow(shadowTime, cmap='gray')
+plt.show()
 
 window3d = plt.figure(figsize=(7, 7))
 axes = plt.axes(projection="3d")
-axes.contourf3D(imgs[0,:,0], imgs[0,0,:], shadowTime)
+axes.surface3D(imgs[0,:,0]*imgs.shape[2], imgs[0,:,0]*imgs.shape[1], shadowTime)
 plt.show()
 
 #window3d = plt.figure(figsize=(5, 4))
