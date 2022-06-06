@@ -31,9 +31,11 @@ def delta(imgs, img, x, y):
 # WHERE, IN THE X-AXIS, IS LOCATED THE SHADOW EDGE?
 def spatialLocation(imgs, ytop, ybottom):
     spatial = []
+    top = int(ytop)
+    bot = int(ybottom)
     for img in imgs:
-        topContour = np.nonzero(img[:][ytop])[0].ravel()[0]
-        bottomContour = np.nonzero(img[:][ybottom])[0].ravel()[0]
+        topContour = np.nonzero(img[top])[0].ravel()[0]
+        bottomContour = np.nonzero(img[bot])[0].ravel()[0]
         spatial.append((topContour, bottomContour))
     return spatial
 
@@ -50,12 +52,6 @@ def shadowTime(imgs, x, y, thresh):
             else:
                 return i
     return shadowTime(imgs, x+1, y, thresh)
-
-""" def optShadowTime(imgs, thresh):
-    times = np.zeros(imgs[0].shape)
-    for i, img in enumerate(imgs):
-        if delta(imgs, img, np.arange(0, img.shape[0], 1), np.arange(0, img.shape[1], 1)) > thresh:
-            times[0:img.shape[0], 0:img.shape[1]] = i """
         
 # PAINTS EVERY FRAME TAKING PIXEL DEPTH IN CONSIDERATION; IF IT PAINTS IN bottom, FRAME DOESN'T CONTRIBUTE TO DEPTH
 # PRINTS A NEW IMAGE TO BE PLOTTED
@@ -137,44 +133,78 @@ sys.setrecursionlimit(imgs[0].shape[0])
 # UNLESS I BOTHER TO IMPLEMENT A MORE ELEGANT SOLUTION
 # LIGHT CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
 # HARDCODING CALIBRATION COORDINATES IS REALLY UNHEALTHY IN PYTHON
-imgPoints = [np.float32([[107, 467],[40, 516],
-            [36, 157],[36, 157],
-            [906, 451],[967, 468],
-            [848, 153],[888, 152]])]
-objPoints = [np.float32([[492.76, 230.58, 0.0],[407.08, 230.58, 0.0],
-            [763.179, 295.08, 0.0],[677.37, 295.08, 0.0],
-            [501.84, -211.90, 0.0],[415.83, -211.90, 0.0],
-            [763.51, -220.34, 0.0], [677.27, -220.34, 0.0]])]
+imgPoints = [np.float32([[499, 81],[534, 36],
+            [168, 40],[168, 69],
+            [489, 930],[515, 971],
+            [163, 865],[163, 892]])]
+objPoints = [np.float32([[470.448, 241.187, 0.0],[397.034, 231.625, 0.0],
+            [752.245, 307.869, 0.0],[667.416, 295.374, 0.0],
+            [479.73, -220.556, 0.0],[406.089, -211.845, 0.0],
+            [753.028, -229.608, 0.0], [667.474, -220.295, 0.0]])]
 
 ret, cameraMatrix, distortionCoefficients, rotationVectors, transformVectors = cv.calibrateCamera(objPoints, imgPoints, calib.shape[1:3], None, None)
-print(type(ret))
+
+# REPROJECTION IN ORDER TO BE SURE THIS CALIBRATION IS WORKING
+meanError = 0
+for i in range(len(objPoints)):
+    imgReversePoints,_ = cv.projectPoints(objPoints[i], rotationVectors[i], transformVectors[i], cameraMatrix, distortionCoefficients)
+    imgPoints[i] = np.float32(imgPoints[i])
+    imgReversePoints = np.ravel(imgReversePoints).reshape((8, 2))
+    error = cv.norm(imgPoints[i], imgReversePoints, cv.NORM_L2)/len(imgReversePoints)
+    meanError += error
+print("total error: {}".format(meanError/len(objPoints)))
+
+# UNDISTORTION
+# I'M FOLLOWING A TUTORIAL AND WANTING TO SEE WHERE IT LEADS
+optCamera, roi = cv.getOptimalNewCameraMatrix(cameraMatrix, distortionCoefficients, (calib[0].shape[1],calib[0].shape[0]), 1, (calib[0].shape[1],calib[0].shape[0]))
+
+x, y, w, h = roi
+
+print(roi)
+raw = cv.undistort(calib[0], cameraMatrix, distortionCoefficients, None, optCamera)
+calibImgs = []
+for i, img in enumerate(imgs):
+    calibrated = cv.undistort(img, cameraMatrix, distortionCoefficients, None, optCamera)
+    calibImgs.append(calibrated[y:y+h, x:x+w])
+calibratedImgs = np.array(calibImgs)
+dst = raw[y:y+h, x:x+w]
+cv.imwrite("rawCalibratedImage.png", raw)
+cv.imwrite("calibratedImage.png", dst)
 
 # SHADOW MAPPING
 
 # EXTRACTING EDGES FOR POSTERIOR SPATIAL SHADOW MAPPING
+# CALIBRATEDIMGS CAN BE CHANGED TO IMGS TO WORK WITH UNCALIBRATED IMAGES
+# BUT FOR THE LOVE OF G-D IF YOU DO THIS YOU NEED TO CHANGE DISTANCES IN SPATIAL LOCATION
 cannyImgs = []
-for img in imgs:
+for img in calibImgs:
     cannyImgs.append(cv.Canny(img,85,255))
 cannyImgs = np.array(cannyImgs)
 
 # SPATIAL SHADOW LOCATION
 # DETECT SHADOW BEHAVIOUR ON PLANE
-spatial = spatialLocation(cannyImgs, ytop, ybottom)
+# IF USING UNCALIBRATED IMAGES FOR CANNY, USE YTOP AND YBOTTOM
+# IF USING CALIBRATED IMAGES, USE int(h * (ytop//imgs[0].shape[0])) AND int(h * (ybottom//imgs[0].shape[0]))
+print(str(h * (ytop/imgs[0].shape[0])) + " " + str(h * (ybottom/imgs[0].shape[0])))
+plt.imshow(cannyImgs[0], cmap='gray')
+plt.show()
+spatial = spatialLocation(cannyImgs, int(h * (ytop/imgs[0].shape[0])), int(h * (ybottom/imgs[0].shape[0])))
 print(spatial)
 
 # EXTRACTING SHADOW AND DELTA FOR DEBUGGING PURPOSES
-mins = optMin(imgs)
-maxes = optMax(imgs)[0]
-shadows = optShadow(imgs)
-deltas = optDeltas(imgs)
+# CALIBRATEDIMGS CAN BE CHANGED TO IMGS TO WORK WITH UNCALIBRATED IMAGES
+mins = optMin(calibratedImgs)
+maxes = optMax(calibratedImgs)[0]
+shadows = optShadow(calibratedImgs)
+deltas = optDeltas(calibratedImgs)
 
 # TEMPORAL SHADOW LOCATION
 # DETECT TIMESLICE IN WHICH FRAME IS TOUCHED BY MOVING SHADOW
-shadowTime = optShadowTime(imgs, deltas, thresh)
+shadowTime = optShadowTime(calibratedImgs, deltas, thresh)
 
 # SHOW IMAGES
 window = plt.figure(figsize=(4,4))
-print(str(shadows.shape) + " " + str(deltas[0].shape))
+# print(str(shadows.shape) + " " + str(deltas[0].shape))
 window.add_subplot(221)
 plt.imshow(shadows, cmap='gray')
 window.add_subplot(222)

@@ -6,32 +6,32 @@ FOCAL LENGTH: 50mm
 
 frame01
 real coord.
- - shadow: 49,276 cm, 23,058 cm, -3,8839 cm
- - obj: 40,708 cm, 23,058 cm, 3,0974 cm
+ - shadow: 47.0448 cm, 24.1187 cm, -3.86584 cm
+ - obj: 39.7034 cm, 23.1625 cm, 3.0446 cm
 img coord.
- - shadow: 107x, 467y
- - obj: x40, y516
+ - shadow: 81x, 499y
+ - obj: x36, y534
 
 frame02
 real coord.
- - shadow: 76,3179, 29,508, -3,8839
- - obj: 67,737, 29,508, 3,0974
+ - shadow: 75.2245 cm, 30.7869 cm, -3.88857 cm
+ - obj: 66.7416 cm, 29.5374 cm, 3.0446 cm
 img coord.
- - shadow: 91x, 157y
- - obj: 36x, 157y
+ - shadow: 69x, 168y
+ - obj: 40x, 168y
 
 frame03
 real coord.
- - shadow: 50,184 cm, -21,19 cm, -3,8839 cm
- - obj: 41,583 cm, -21,19 cm, 3,0974 cm
+ - shadow: 47.973 cm, -22.0556 cm, -3,8839 cm
+ - obj: 40.6089 cm, -21.1845 cm, 3.0446 cm
 img coord.
- - shadow: 906x, 451y
- - obj: 967x, 468y
+ - shadow: 930x, 489y
+ - obj: 971x, 515y
 
 frame04
 real coord.
- - shadow: 76,351 cm, -22,034 cm, -3,8839cm
- - obj: 67,727 cm, -22,034 cm, 3,0974 cm
+ - shadow: 75.3028 cm, -22.9608 cm, -3,8839cm
+ - obj: 66.7474 cm, -22.0295 cm, 3,0974 cm
 img coord.
- - shadow: 848x, 153y
- - obj: 888x, 152y
+ - shadow: 865x, 163y
+ - obj: 892x, 163y
