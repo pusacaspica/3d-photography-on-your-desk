@@ -3,6 +3,7 @@ import re
 import os
 import cv2 as cv
 from cv2 import projectPoints
+from cv2 import CALIB_USE_INTRINSIC_GUESS
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -103,7 +104,7 @@ def optShadowTime(imgs, deltas, thresh):
 
 # PROGRAM START
 the_path = "./" # TRIED MAKING IT AN INPUT, DIDN'T WORK
-imgs, calib = [], []
+imgs, lampcalib, camcalib = [], [], []
 maxs,  mins = [], []
 spatial, temporal = [], []
 ytop = int(input('enter ytop: '))
@@ -115,53 +116,50 @@ for files in os.scandir(the_path):
     if files.name.rfind(".jpg"):
         if re.match('lamp_calibration_*', files.name):
             #print(files.name)
-            calib.append(cv.imread(files.name, cv.IMREAD_GRAYSCALE))
+            lampcalib.append(cv.imread(files.name, cv.IMREAD_GRAYSCALE))
         elif re.match('00*', files.name):
             #print(files.name)
             imgs.append(cv.imread(files.name, cv.IMREAD_GRAYSCALE))
+        elif re.match('camera_calibration_*', files.name):
+            print("aye")
+            camcalib.append(cv.imread(files.name, cv.IMREAD_GRAYSCALE))
         else:
             continue
 
 # CONVERTING IMGS TO NP.ARRAY
 imgs = np.array(imgs)
-calib = np.array(calib)
+lampcalib = np.array(lampcalib)
+camcalib = np.array(camcalib)
 
 # EXTENDING RECURSION LIMIT BECAUSE WE CAN
 sys.setrecursionlimit(imgs[0].shape[0])
 
 # CAMERA CALIBRATION
-# UNLESS I BOTHER TO IMPLEMENT A MORE ELEGANT SOLUTION
-# LIGHT CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
-# HARDCODING CALIBRATION COORDINATES IS REALLY UNHEALTHY IN PYTHON
-imgPoints = [np.float32([[499, 81],[534, 36],
-            [168, 40],[168, 69],
-            [489, 930],[515, 971],
-            [163, 865],[163, 892]])]
-objPoints = [np.float32([[470.448, 241.187, 0.0],[397.034, 231.625, 0.0],
-            [752.245, 307.869, 0.0],[667.416, 295.374, 0.0],
-            [479.73, -220.556, 0.0],[406.089, -211.845, 0.0],
-            [753.028, -229.608, 0.0], [667.474, -220.295, 0.0]])]
+# VANILLA CALIBRATION, NOTHING FANCY NOR SPECIAL ABOUT IT
+criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+irlCheckerPoints = np.zeros((6*4, 3), np.float32)
+irlCheckerPoints[:, :2] = np.mgrid[0:4, 0:6].T.reshape(-1,2)
+imgPoints_camera = [np.float32([[266, 182], [330, 182], [395, 181], [459, 180], [524, 180], [589, 180], [654, 179],
+                   [259, 224], [324, 224], [390, 224], [458, 224], [524, 223], [591, 223], [593, 223],
+                   [249, 271], [317, 270], [387, 270], [456, 270], [525, 269], [658, 269], [663, 269]])]
+objPoints_camera = [np.float32([[0,0,0],[0,1,0],[0,2,0],[0,3,0],[0,4,0],[0,5,0],[0,6,0],
+                   [1,0,0],[1,1,0],[1,2,0],[1,3,0],[1,4,0],[1,5,0],[1,6,0],
+                   [2,0,0],[2,1,0],[2,2,0],[2,3,0],[2,4,0],[2,5,0],[2,6,0]])]
+#contours, hierarchy = cv.findContours(camcalib[0], cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+#cv.cornerSubPix(camcalib[0], contours, (camcalib[0].shape[1], camcalib[0].shape[0]), (-1, -1), cv.TermCriteria_MAX_ITER)
+#plt.imshow(cv.drawContours(camcalib[0], contours, -1, (255, 255, 255), 8, cv.FILLED, hierarchy))
+#plt.show()
 
-ret, cameraMatrix, distortionCoefficients, rotationVectors, transformVectors = cv.calibrateCamera(objPoints, imgPoints, calib.shape[1:3], None, None)
+ret, cameraMatrix, distortionCoefficients, rotationVectors, transformVectors = cv.calibrateCamera(objPoints_camera, imgPoints_camera, camcalib[0].shape, None, None, None, None)
 
-# REPROJECTION IN ORDER TO BE SURE THIS CALIBRATION IS WORKING
-meanError = 0
-for i in range(len(objPoints)):
-    imgReversePoints,_ = cv.projectPoints(objPoints[i], rotationVectors[i], transformVectors[i], cameraMatrix, distortionCoefficients)
-    imgPoints[i] = np.float32(imgPoints[i])
-    imgReversePoints = np.ravel(imgReversePoints).reshape((8, 2))
-    error = cv.norm(imgPoints[i], imgReversePoints, cv.NORM_L2)/len(imgReversePoints)
-    meanError += error
-print("total error: {}".format(meanError/len(objPoints)))
 
 # UNDISTORTION
 # I'M FOLLOWING A TUTORIAL AND WANTING TO SEE WHERE IT LEADS
-optCamera, roi = cv.getOptimalNewCameraMatrix(cameraMatrix, distortionCoefficients, (calib[0].shape[1],calib[0].shape[0]), 1, (calib[0].shape[1],calib[0].shape[0]))
-
+optCamera, roi = cv.getOptimalNewCameraMatrix(cameraMatrix, distortionCoefficients, (camcalib[0].shape[1],camcalib[0].shape[0]), 1, (camcalib[0].shape[1],camcalib[0].shape[0]))
 x, y, w, h = roi
 
 print(roi)
-raw = cv.undistort(calib[0], cameraMatrix, distortionCoefficients, None, optCamera)
+raw = cv.undistort(camcalib[0], cameraMatrix, distortionCoefficients, None, optCamera)
 calibImgs = []
 for i, img in enumerate(imgs):
     calibrated = cv.undistort(img, cameraMatrix, distortionCoefficients, None, optCamera)
@@ -169,7 +167,31 @@ for i, img in enumerate(imgs):
 calibratedImgs = np.array(calibImgs)
 dst = raw[y:y+h, x:x+w]
 cv.imwrite("rawCalibratedImage.png", raw)
-cv.imwrite("calibratedImage.png", dst)
+#cv.imwrite("calibratedImage.png", dst)
+
+# REPROJECTION IN ORDER TO BE SURE THIS CALIBRATION IS WORKING
+meanError = 0
+for i in range(len(objPoints_camera)):
+    imgReversePoints,_ = cv.projectPoints(objPoints_camera[i], rotationVectors[i], transformVectors[i], cameraMatrix, distortionCoefficients)
+    print(imgReversePoints)
+    imgPoints_camera[i] = np.float32(imgPoints_camera[i])
+    imgReversePoints = np.ravel(imgReversePoints).reshape((21, 2))
+    error = cv.norm(imgPoints_camera[i], imgReversePoints, cv.NORM_L2)/len(imgReversePoints)
+    meanError += error
+print("total error: {}".format(meanError/len(objPoints_camera)))
+
+# LIGHT CALIBRATION
+# UNLESS I BOTHER TO IMPLEMENT A MORE ELEGANT SOLUTION
+# LIGHT CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
+# HARDCODING CALIBRATION COORDINATES IS REALLY UNHEALTHY IN PYTHON
+imgPoints = [np.float32([[499, 81],[534, 36],
+            [168, 40],[168, 69],
+            [489, 930],[515, 971],
+            [163, 865],[163, 892]])]
+objPoints = [np.float32([[470.448, 241.187, 70.0],[397.034, 231.625, 0.0],
+            [752.245, 307.869, 70.0],[667.416, 295.374, 0.0],
+            [479.73, -220.556, 70.0],[406.089, -211.845, 0.0],
+            [753.028, -229.608, 70.0], [667.474, -220.295, 0.0]])]
 
 # SHADOW MAPPING
 
@@ -177,30 +199,30 @@ cv.imwrite("calibratedImage.png", dst)
 # CALIBRATEDIMGS CAN BE CHANGED TO IMGS TO WORK WITH UNCALIBRATED IMAGES
 # BUT FOR THE LOVE OF G-D IF YOU DO THIS YOU NEED TO CHANGE DISTANCES IN SPATIAL LOCATION
 cannyImgs = []
-for img in calibImgs:
+for img in imgs:
     cannyImgs.append(cv.Canny(img,85,255))
 cannyImgs = np.array(cannyImgs)
 
 # SPATIAL SHADOW LOCATION
 # DETECT SHADOW BEHAVIOUR ON PLANE
-# IF USING UNCALIBRATED IMAGES FOR CANNY, USE YTOP AND YBOTTOM
+# IF USING UNCALIBRATED IMAGES FOR CANNY, USE ytop AND ybottom
 # IF USING CALIBRATED IMAGES, USE int(h * (ytop//imgs[0].shape[0])) AND int(h * (ybottom//imgs[0].shape[0]))
 print(str(h * (ytop/imgs[0].shape[0])) + " " + str(h * (ybottom/imgs[0].shape[0])))
 plt.imshow(cannyImgs[0], cmap='gray')
 plt.show()
-spatial = spatialLocation(cannyImgs, int(h * (ytop/imgs[0].shape[0])), int(h * (ybottom/imgs[0].shape[0])))
+spatial = spatialLocation(cannyImgs, ytop, ybottom)
 print(spatial)
 
 # EXTRACTING SHADOW AND DELTA FOR DEBUGGING PURPOSES
 # CALIBRATEDIMGS CAN BE CHANGED TO IMGS TO WORK WITH UNCALIBRATED IMAGES
-mins = optMin(calibratedImgs)
-maxes = optMax(calibratedImgs)[0]
-shadows = optShadow(calibratedImgs)
-deltas = optDeltas(calibratedImgs)
+mins = optMin(imgs)[0]
+maxes = optMax(imgs)[0]
+shadows = optShadow(imgs)
+deltas = optDeltas(imgs)
 
 # TEMPORAL SHADOW LOCATION
 # DETECT TIMESLICE IN WHICH FRAME IS TOUCHED BY MOVING SHADOW
-shadowTime = optShadowTime(calibratedImgs, deltas, thresh)
+shadowTime = optShadowTime(imgs, deltas, thresh)
 
 # SHOW IMAGES
 window = plt.figure(figsize=(4,4))
