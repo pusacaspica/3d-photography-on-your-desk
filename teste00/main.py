@@ -142,20 +142,16 @@ irlCheckerPoints[:, :2] = np.mgrid[0:4, 0:6].T.reshape(-1,2)
 imgPoints_camera = [np.float32([[266, 182], [330, 182], [395, 181], [459, 180], [524, 180], [589, 180], [654, 179],
                    [259, 224], [324, 224], [390, 224], [458, 224], [524, 223], [591, 223], [593, 223],
                    [249, 271], [317, 270], [387, 270], [456, 270], [525, 269], [658, 269], [663, 269]])]
-objPoints_camera = [np.float32([[0,0,0],[0,1,0],[0,2,0],[0,3,0],[0,4,0],[0,5,0],[0,6,0],
-                   [1,0,0],[1,1,0],[1,2,0],[1,3,0],[1,4,0],[1,5,0],[1,6,0],
-                   [2,0,0],[2,1,0],[2,2,0],[2,3,0],[2,4,0],[2,5,0],[2,6,0]])]
-#contours, hierarchy = cv.findContours(camcalib[0], cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
-#cv.cornerSubPix(camcalib[0], contours, (camcalib[0].shape[1], camcalib[0].shape[0]), (-1, -1), cv.TermCriteria_MAX_ITER)
-#plt.imshow(cv.drawContours(camcalib[0], contours, -1, (255, 255, 255), 8, cv.FILLED, hierarchy))
-#plt.show()
+objPoints_camera = [np.float32([[0,0,0],[0,10,0],[0,20,0],[0,30,0],[0,40,0],[0,50,0],[0,60,0],
+                   [10,0,0],[10,10,0],[10,20,0],[10,30,0],[10,40,0],[10,50,0],[10,60,0],
+                   [20,0,0],[20,10,0],[20,20,0],[20,30,0],[20,40,0],[20,50,0],[20,60,0]])]
 
-ret, cameraMatrix, distortionCoefficients, rotationVectors, transformVectors = cv.calibrateCamera(objPoints_camera, imgPoints_camera, camcalib[0].shape, None, None, None, None)
+ret, cameraMatrix, distortionCoefficients, rotationVectors, transformVectors = cv.calibrateCamera(objPoints_camera, imgPoints_camera, camcalib[0].shape, None, None, None, None, flags=cv.CALIB_RATIONAL_MODEL  )
 
 
 # UNDISTORTION
 # I'M FOLLOWING A TUTORIAL AND WANTING TO SEE WHERE IT LEADS
-optCamera, roi = cv.getOptimalNewCameraMatrix(cameraMatrix, distortionCoefficients, (camcalib[0].shape[1],camcalib[0].shape[0]), 1, (camcalib[0].shape[1],camcalib[0].shape[0]))
+optCamera, roi = cv.getOptimalNewCameraMatrix(cameraMatrix, distortionCoefficients, (camcalib[0].shape), 1, (camcalib[0].shape))
 x, y, w, h = roi
 
 print(roi)
@@ -167,7 +163,7 @@ for i, img in enumerate(imgs):
 calibratedImgs = np.array(calibImgs)
 dst = raw[y:y+h, x:x+w]
 cv.imwrite("rawCalibratedImage.png", raw)
-#cv.imwrite("calibratedImage.png", dst)
+cv.imwrite("calibratedImage.png", dst)
 
 # REPROJECTION IN ORDER TO BE SURE THIS CALIBRATION IS WORKING
 meanError = 0
@@ -188,10 +184,10 @@ imgPoints = [np.float32([[499, 81],[534, 36],
             [168, 40],[168, 69],
             [489, 930],[515, 971],
             [163, 865],[163, 892]])]
-objPoints = [np.float32([[470.448, 241.187, 70.0],[397.034, 231.625, 0.0],
-            [752.245, 307.869, 70.0],[667.416, 295.374, 0.0],
-            [479.73, -220.556, 70.0],[406.089, -211.845, 0.0],
-            [753.028, -229.608, 70.0], [667.474, -220.295, 0.0]])]
+objPoints = [np.float32([[470.448 - 397.034, 241.187 + 229.608, 70.0],[397.034 - 397.034, 231.625 + 229.608, 0.0],
+            [752.245 - 397.034, 307.869 + 229.608, 70.0],[667.416 - 397.034, 295.374 + 229.608, 0.0],
+            [479.73 - 397.034, -220.556 + 229.608, 70.0],[406.089 - 397.034, -211.845 + 229.608, 0.0],
+            [753.028 - 397.034, -229.608 + 229.608, 70.0], [667.474 - 397.034, -220.295 + 229.608, 0.0]])]
 
 # SHADOW MAPPING
 
