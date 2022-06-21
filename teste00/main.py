@@ -140,13 +140,17 @@ criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 irlCheckerPoints = np.zeros((6*4, 3), np.float32)
 irlCheckerPoints[:, :2] = np.mgrid[0:4, 0:6].T.reshape(-1,2)
 imgPoints_camera = [np.float32([[266, 182], [330, 182], [395, 181], [459, 180], [524, 180], [589, 180], [654, 179],
-                   [259, 224], [324, 224], [390, 224], [458, 224], [524, 223], [591, 223], [593, 223],
-                   [249, 271], [317, 270], [387, 270], [456, 270], [525, 269], [658, 269], [663, 269]])]
+                   [259, 224], [324, 224], [390, 224], [458, 224], [524, 223], [591, 223], [659, 223],
+                   [249, 271], [317, 270], [387, 270], [456, 270], [525, 269], [593, 269], [663, 269]])]
 objPoints_camera = [np.float32([[0,0,0],[0,10,0],[0,20,0],[0,30,0],[0,40,0],[0,50,0],[0,60,0],
                    [10,0,0],[10,10,0],[10,20,0],[10,30,0],[10,40,0],[10,50,0],[10,60,0],
                    [20,0,0],[20,10,0],[20,20,0],[20,30,0],[20,40,0],[20,50,0],[20,60,0]])]
 
-ret, cameraMatrix, distortionCoefficients, rotationVectors, transformVectors = cv.calibrateCamera(objPoints_camera, imgPoints_camera, camcalib[0].shape, None, None, None, None, flags=cv.CALIB_RATIONAL_MODEL  )
+imgPts = cv.cornerHarris(camcalib[0], 4, 5, 0.5)
+print(imgPts)
+imgPts = cv.cornerSubPix(camcalib[0], imgPts, (5, 5),(-1, -1), criteria)
+
+ret, cameraMatrix, distortionCoefficients, rotationVectors, transformVectors = cv.calibrateCamera(objPoints_camera, imgPts, camcalib[0].shape, None, None, None, None, flags=cv.CALIB_FIX_PRINCIPAL_POINT)
 
 
 # UNDISTORTION
