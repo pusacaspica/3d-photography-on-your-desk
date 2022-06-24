@@ -4,10 +4,18 @@ import os
 import cv2 as cv
 from cv2 import projectPoints
 from cv2 import CALIB_USE_INTRINSIC_GUESS
+import json
+import numpy
 import numpy as np
 import matplotlib.pyplot as plt
 
 #np.set_printoptions(threshold=sys.maxsize)
+
+class NumpyArrayEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, numpy.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 # GET COLOR MAGNITUDE FROM PIXEL
 def getColorMagnitude(pixel):
@@ -104,7 +112,7 @@ def optShadowTime(imgs, deltas, thresh):
 
 # PROGRAM START
 the_path = "./" # TRIED MAKING IT AN INPUT, DIDN'T WORK
-imgs, lampcalib, camcalib = [], [], []
+imgs, calibImgs, lampcalib, camcalib = [], [], [], []
 maxs,  mins = [], []
 spatial, temporal = [], []
 ytop = int(input('enter ytop: '))
@@ -135,50 +143,80 @@ camcalib = np.array(camcalib)
 sys.setrecursionlimit(imgs[0].shape[0])
 
 # CAMERA CALIBRATION
-# VANILLA CALIBRATION, NOTHING FANCY NOR SPECIAL ABOUT IT
+# termination criteria
 criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-irlCheckerPoints = np.zeros((6*4, 3), np.float32)
-irlCheckerPoints[:, :2] = np.mgrid[0:4, 0:6].T.reshape(-1,2)
-imgPoints_camera = [np.float32([[266, 182], [330, 182], [395, 181], [459, 180], [524, 180], [589, 180], [654, 179],
+
+# prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
+objp = np.zeros((6*7,3), np.float32)
+objp[:,:2] = np.mgrid[0:7,0:6].T.reshape(-1,2)
+
+objpoints =[] 
+imgpoints = []
+
+'''imgPoints_camera = [np.float32([[266, 182], [330, 182], [395, 181], [459, 180], [524, 180], [589, 180], [654, 179],
                    [259, 224], [324, 224], [390, 224], [458, 224], [524, 223], [591, 223], [659, 223],
                    [249, 271], [317, 270], [387, 270], [456, 270], [525, 269], [593, 269], [663, 269]])]
 objPoints_camera = [np.float32([[0,0,0],[0,10,0],[0,20,0],[0,30,0],[0,40,0],[0,50,0],[0,60,0],
                    [10,0,0],[10,10,0],[10,20,0],[10,30,0],[10,40,0],[10,50,0],[10,60,0],
-                   [20,0,0],[20,10,0],[20,20,0],[20,30,0],[20,40,0],[20,50,0],[20,60,0]])]
+                   [20,0,0],[20,10,0],[20,20,0],[20,30,0],[20,40,0],[20,50,0],[20,60,0]])]'''
 
-imgPts = cv.cornerHarris(camcalib[0], 4, 5, 0.5)
-print(imgPts)
-imgPts = cv.cornerSubPix(camcalib[0], imgPts, (5, 5),(-1, -1), criteria)
+ret, corners = cv.findChessboardCorners(camcalib[0], (7, 6), None)
+if ret == True:
+    objpoints.append(objp)
+    corners2 = cv.cornerSubPix(camcalib[0], corners, (11,11), (-1, -1), criteria)
+    imgpoints.append(corners2)
+    '''cv.drawChessboardCorners(camcalib[0], (7, 6), corners2, ret)
+    plt.imshow(camcalib[0], cmap='gray')
+    plt.show()'''
 
-ret, cameraMatrix, distortionCoefficients, rotationVectors, transformVectors = cv.calibrateCamera(objPoints_camera, imgPts, camcalib[0].shape, None, None, None, None, flags=cv.CALIB_FIX_PRINCIPAL_POINT)
+corners = np.array(corners)
+corners = corners.reshape(corners.shape[0], corners.shape[2])
+objpoints = np.array(objpoints)
+imgpoints = np.array(imgpoints)
+imgpoints = imgpoints.reshape(imgpoints.shape[2], imgpoints.shape[1],imgpoints.shape[3])
+print(corners.shape)
+print(objpoints.shape)
+print(imgpoints.shape)
+ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, camcalib[0].shape[::-1], None, None)
+print(rvecs)
+print(tvecs)
 
+plotx = ploty = np.linspace(-10, 10, 100)
+plotx, ploty = np.meshgrid(plotx, ploty)
+eq = rvecs[0][0] * (plotx+tvecs[0][0]) + rvecs[0][1] * (ploty+tvecs[0][1]) + rvecs[0][2]
+fg = plt.figure()
+ax = fg.gca(projection='3d')
+ax.plot_surface(plotx, ploty, eq)
+plt.show()
+
+
+h, w = camcalib[0].shape[:2]
+optMtx, roi = cv.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
+x, y, w, h = roi
+print(roi)
+lampcalib[0] = cv.undistort(lampcalib[0], mtx, dist, None, optMtx)
 
 # UNDISTORTION
 # I'M FOLLOWING A TUTORIAL AND WANTING TO SEE WHERE IT LEADS
-optCamera, roi = cv.getOptimalNewCameraMatrix(cameraMatrix, distortionCoefficients, (camcalib[0].shape), 1, (camcalib[0].shape))
-x, y, w, h = roi
-
-print(roi)
-raw = cv.undistort(camcalib[0], cameraMatrix, distortionCoefficients, None, optCamera)
-calibImgs = []
 for i, img in enumerate(imgs):
-    calibrated = cv.undistort(img, cameraMatrix, distortionCoefficients, None, optCamera)
+    calibrated = cv.undistort(img, mtx, dist, None, optMtx)
     calibImgs.append(calibrated[y:y+h, x:x+w])
-calibratedImgs = np.array(calibImgs)
-dst = raw[y:y+h, x:x+w]
-cv.imwrite("rawCalibratedImage.png", raw)
-cv.imwrite("calibratedImage.png", dst)
+calibImgs = np.array(calibImgs)
+cv.imwrite("rawCalibratedImage.png", lampcalib[0])
+calibLampCalib = lampcalib[0][y:y+h, x:x+w]
+cv.imwrite("calibratedImage.png", calibLampCalib)
 
 # REPROJECTION IN ORDER TO BE SURE THIS CALIBRATION IS WORKING
 meanError = 0
-for i in range(len(objPoints_camera)):
-    imgReversePoints,_ = cv.projectPoints(objPoints_camera[i], rotationVectors[i], transformVectors[i], cameraMatrix, distortionCoefficients)
-    print(imgReversePoints)
-    imgPoints_camera[i] = np.float32(imgPoints_camera[i])
-    imgReversePoints = np.ravel(imgReversePoints).reshape((21, 2))
-    error = cv.norm(imgPoints_camera[i], imgReversePoints, cv.NORM_L2)/len(imgReversePoints)
+for i in range(len(objpoints)):
+    imgReversePoints,_ = cv.projectPoints(objpoints[i], rvecs[i], tvecs[i], mtx, dist)
+    # print(imgReversePoints)
+    imgpoints[i] = np.float32(imgpoints[i])
+    print(imgReversePoints.shape)
+    imgReversePoints = np.ravel(imgReversePoints).reshape((imgReversePoints.shape[0], 2))
+    error = cv.norm(imgpoints[i], imgReversePoints, cv.NORM_L2)/len(imgReversePoints)
     meanError += error
-print("total error: {}".format(meanError/len(objPoints_camera)))
+print("total error: {}".format(meanError/len(objpoints)))
 
 # LIGHT CALIBRATION
 # UNLESS I BOTHER TO IMPLEMENT A MORE ELEGANT SOLUTION
@@ -199,7 +237,7 @@ objPoints = [np.float32([[470.448 - 397.034, 241.187 + 229.608, 70.0],[397.034 -
 # CALIBRATEDIMGS CAN BE CHANGED TO IMGS TO WORK WITH UNCALIBRATED IMAGES
 # BUT FOR THE LOVE OF G-D IF YOU DO THIS YOU NEED TO CHANGE DISTANCES IN SPATIAL LOCATION
 cannyImgs = []
-for img in imgs:
+for img in calibImgs:
     cannyImgs.append(cv.Canny(img,85,255))
 cannyImgs = np.array(cannyImgs)
 
@@ -210,19 +248,19 @@ cannyImgs = np.array(cannyImgs)
 print(str(h * (ytop/imgs[0].shape[0])) + " " + str(h * (ybottom/imgs[0].shape[0])))
 plt.imshow(cannyImgs[0], cmap='gray')
 plt.show()
-spatial = spatialLocation(cannyImgs, ytop, ybottom)
+spatial = spatialLocation(cannyImgs, int(h * (ytop//imgs[0].shape[0])), int(h * (ybottom//imgs[0].shape[0])))
 print(spatial)
 
 # EXTRACTING SHADOW AND DELTA FOR DEBUGGING PURPOSES
 # CALIBRATEDIMGS CAN BE CHANGED TO IMGS TO WORK WITH UNCALIBRATED IMAGES
-mins = optMin(imgs)[0]
-maxes = optMax(imgs)[0]
-shadows = optShadow(imgs)
-deltas = optDeltas(imgs)
+mins = optMin(calibImgs)[0]
+maxes = optMax(calibImgs)[0]
+shadows = optShadow(calibImgs)
+deltas = optDeltas(calibImgs)
 
 # TEMPORAL SHADOW LOCATION
 # DETECT TIMESLICE IN WHICH FRAME IS TOUCHED BY MOVING SHADOW
-shadowTime = optShadowTime(imgs, deltas, thresh)
+shadowTime = optShadowTime(calibImgs, deltas, thresh)
 
 # SHOW IMAGES
 window = plt.figure(figsize=(4,4))
@@ -237,10 +275,25 @@ window.add_subplot(224)
 plt.imshow(shadowTime, cmap='gray')
 plt.show()
 
-window3d = plt.figure(figsize=(7, 7))
+#vertices = '"vertices" : ['
+vertices = []
+for i, times in enumerate(shadowTime):
+    #if (i > 0):
+    #    vertices += ", "
+    for j, time in enumerate(times):
+        vertices.append(j%calibImgs[0].shape[1])
+        vertices.append(shadowTime[i, j])
+        vertices.append(i)
+vertices = np.array(vertices, dtype=np.int32)
+entry = {"vertices": vertices}
+with open("mesh.json", "w") as write_file:
+    json.dump(entry, write_file, cls=NumpyArrayEncoder)
+#vertices += ']'
+
+'''window3d = plt.figure(figsize=(7, 7))
 axes = plt.axes(projection="3d")
 axes.surface3D(imgs[0,:,0]*imgs.shape[2], imgs[0,:,0]*imgs.shape[1], shadowTime)
-plt.show()
+plt.show()'''
 
 #window3d = plt.figure(figsize=(5, 4))
 #axes = plt.axes(projection="3d")
