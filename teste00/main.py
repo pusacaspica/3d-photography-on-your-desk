@@ -43,8 +43,14 @@ def spatialLocation(imgs, ytop, ybottom):
     top = int(ytop)
     bot = int(ybottom)
     for img in imgs:
-        topContour = np.nonzero(img[top])[0].ravel()[0]
-        bottomContour = np.nonzero(img[bot])[0].ravel()[0]
+        if(np.nonzero(img[top])[0].size < 2):
+            topContour = -1
+        else:
+            topContour = np.nonzero(img[top])[0].ravel()[0]
+        if(np.nonzero(img[bot])[0].size < 2):
+            bottomContour = -1
+        else:
+            bottomContour = np.nonzero(img[bot])[0].ravel()[0]
         spatial.append((topContour, bottomContour))
     return spatial
 
@@ -181,9 +187,9 @@ ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, camcalib
 print(rvecs)
 print(tvecs)
 
-plotx = ploty = np.linspace(-10, 10, 100)
+plotx = ploty = np.linspace(-100, 100, 100)
 plotx, ploty = np.meshgrid(plotx, ploty)
-eq = rvecs[0][0] * (plotx+tvecs[0][0]) + rvecs[0][1] * (ploty+tvecs[0][1]) + rvecs[0][2]
+eq = rvecs[0][0] * (plotx-tvecs[0][0]) + rvecs[0][1] * (ploty-tvecs[0][1]) + rvecs[0][2]*(-tvecs[0][2])
 fg = plt.figure()
 ax = fg.gca(projection='3d')
 ax.plot_surface(plotx, ploty, eq)
@@ -231,6 +237,13 @@ objPoints = [np.float32([[470.448 - 397.034, 241.187 + 229.608, 70.0],[397.034 -
             [479.73 - 397.034, -220.556 + 229.608, 70.0],[406.089 - 397.034, -211.845 + 229.608, 0.0],
             [753.028 - 397.034, -229.608 + 229.608, 70.0], [667.474 - 397.034, -220.295 + 229.608, 0.0]])]
 
+# TO DO: INTERCEPT ALL THESE POINTS
+# REAL LIFE POINTS ARE THE ONES WHO MATTER, MUST EXTRACT VALUES FROM imgPoints
+# 1. CONVERT imgPoints TO OBJECT POINTS (multiply with camera matrix mtx?)
+# 2. ISOLATE THE VECTOR OF THE LINE as seen on http://ramanujan.math.trinity.edu/rdaileda/teach/f20/m2321/lectures/lecture5_slides.pdf
+# 3. USE LEAST SQUARES TO DETECT INTERSECTION
+
+
 # SHADOW MAPPING
 
 # EXTRACTING EDGES FOR POSTERIOR SPATIAL SHADOW MAPPING
@@ -245,11 +258,14 @@ cannyImgs = np.array(cannyImgs)
 # DETECT SHADOW BEHAVIOUR ON PLANE
 # IF USING UNCALIBRATED IMAGES FOR CANNY, USE ytop AND ybottom
 # IF USING CALIBRATED IMAGES, USE int(h * (ytop//imgs[0].shape[0])) AND int(h * (ybottom//imgs[0].shape[0]))
-print(str(h * (ytop/imgs[0].shape[0])) + " " + str(h * (ybottom/imgs[0].shape[0])))
+print(((str(h * (ytop//imgs[0].shape[0])))) + " " + str(h * (ybottom//imgs[0].shape[0])))
+spatial = spatialLocation(cannyImgs, int(h * (ytop/imgs[0].shape[0])), int(h * (ybottom/imgs[0].shape[0])))
+print(spatial)
 plt.imshow(cannyImgs[0], cmap='gray')
 plt.show()
-spatial = spatialLocation(cannyImgs, int(h * (ytop//imgs[0].shape[0])), int(h * (ybottom//imgs[0].shape[0])))
-print(spatial)
+# NOT DONE YET
+# SHADOW PLANES MUST BE ESTIMATED
+# CAN ONLY BE DONE WHEN LIGHT CALIBRATION IS DONE
 
 # EXTRACTING SHADOW AND DELTA FOR DEBUGGING PURPOSES
 # CALIBRATEDIMGS CAN BE CHANGED TO IMGS TO WORK WITH UNCALIBRATED IMAGES
