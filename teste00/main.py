@@ -236,7 +236,14 @@ objPoints = [np.float32([[470.448 - 397.034, 241.187 + 229.608, 70.0],[397.034 -
             [752.245 - 397.034, 307.869 + 229.608, 70.0],[667.416 - 397.034, 295.374 + 229.608, 0.0],
             [479.73 - 397.034, -220.556 + 229.608, 70.0],[406.089 - 397.034, -211.845 + 229.608, 0.0],
             [753.028 - 397.034, -229.608 + 229.608, 70.0], [667.474 - 397.034, -220.295 + 229.608, 0.0]])]
-print(objPoints[0].size)
+dst = cv.cornerHarris(calibLampCalib, 2, 3, 0.04)
+# Threshold for an optimal value, it may vary depending on the image.
+calibLampCalib[dst>0.01*dst.max()]=255
+#result is dilated for marking the corners, not important
+dst = cv.dilate(calibLampCalib,None)
+plt.imshow(calibLampCalib, cmap='gray')
+plt.show()
+
 lightLines = []
 # TO DO: INTERCEPT ALL THESE POINTS
 # REAL LIFE POINTS ARE THE ONES WHO MATTER, MUST EXTRACT VALUES FROM imgPoints
