@@ -236,7 +236,8 @@ objPoints = [np.float32([[470.448 - 397.034, 241.187 + 229.608, 70.0],[397.034 -
             [752.245 - 397.034, 307.869 + 229.608, 70.0],[667.416 - 397.034, 295.374 + 229.608, 0.0],
             [479.73 - 397.034, -220.556 + 229.608, 70.0],[406.089 - 397.034, -211.845 + 229.608, 0.0],
             [753.028 - 397.034, -229.608 + 229.608, 70.0], [667.474 - 397.034, -220.295 + 229.608, 0.0]])]
-
+print(objPoints[0].size)
+lightLines = []
 # TO DO: INTERCEPT ALL THESE POINTS
 # REAL LIFE POINTS ARE THE ONES WHO MATTER, MUST EXTRACT VALUES FROM imgPoints
 # 1. CONVERT imgPoints TO OBJECT POINTS (multiply with camera matrix mtx?)
@@ -257,8 +258,7 @@ cannyImgs = np.array(cannyImgs)
 # SPATIAL SHADOW LOCATION
 # DETECT SHADOW BEHAVIOUR ON PLANE
 # IF USING UNCALIBRATED IMAGES FOR CANNY, USE ytop AND ybottom
-# IF USING CALIBRATED IMAGES, USE int(h * (ytop//imgs[0].shape[0])) AND int(h * (ybottom//imgs[0].shape[0]))
-print(((str(h * (ytop//imgs[0].shape[0])))) + " " + str(h * (ybottom//imgs[0].shape[0])))
+# IF USING CALIBRATED IMAGES, USE int(h * (ytop/imgs[0].shape[0])) AND int(h * (ybottom/imgs[0].shape[0]))
 spatial = spatialLocation(cannyImgs, int(h * (ytop/imgs[0].shape[0])), int(h * (ybottom/imgs[0].shape[0])))
 print(spatial)
 plt.imshow(cannyImgs[0], cmap='gray')
