@@ -10,6 +10,39 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 #np.set_printoptions(threshold=sys.maxsize)
+def nearestIntersection(points, diffs):
+    """
+    :param points: (N, 3) array of points on the lines
+    :param dirs: (N, 3) array of unit direction vectors
+    :returns: (3,) array of intersection point
+    """
+    dirs_mat = diffs[:, :, np.newaxis] @ diffs[:, np.newaxis, :]
+    points_mat = points[:, :, np.newaxis]
+    I = np.eye(3)
+    return np.linalg.lstsq(
+        (I - dirs_mat).sum(axis=0),
+        ((I - dirs_mat) @ points_mat).sum(axis=0),
+        rcond=None
+    )[0]
+
+def getLineIntersection(a1, a2, b1, b2):
+    """ 
+    Returns the point of intersection of the lines passing through a2,a1 and b2,b1.
+    a1: [x, y] a point on the first line
+    a2: [x, y] another point on the first line
+    b1: [x, y] a point on the second line
+    b2: [x, y] another point on the second line
+    """
+    s = np.vstack([a1,a2,b1,b2])        # s for stacked
+    print(s)
+    h = np.hstack((s, np.ones((4, 1)))) # h for homogeneous
+    l1 = np.cross(s[0], s[1])           # get first line
+    l2 = np.cross(s[2], s[3])           # get second line
+    x, y, z = np.cross(l1, l2)          # point of intersection
+    if w == 0:                          # lines are parallel
+        return (float('inf'), float('inf'))
+    print(str(x) + ' ' + str(y) + ' ' + str(z))
+    return (x, y, z)
 
 class NumpyArrayEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -180,12 +213,7 @@ corners = corners.reshape(corners.shape[0], corners.shape[2])
 objpoints = np.array(objpoints)
 imgpoints = np.array(imgpoints)
 imgpoints = imgpoints.reshape(imgpoints.shape[2], imgpoints.shape[1],imgpoints.shape[3])
-print(corners.shape)
-print(objpoints.shape)
-print(imgpoints.shape)
 ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, camcalib[0].shape[::-1], None, None)
-print(rvecs)
-print(tvecs)
 
 plotx = ploty = np.linspace(-100, 100, 100)
 plotx, ploty = np.meshgrid(plotx, ploty)
@@ -199,7 +227,6 @@ plt.show()
 h, w = camcalib[0].shape[:2]
 optMtx, roi = cv.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
 x, y, w, h = roi
-print(roi)
 lampcalib[0] = cv.undistort(lampcalib[0], mtx, dist, None, optMtx)
 
 # UNDISTORTION
@@ -211,7 +238,6 @@ calibImgs = np.array(calibImgs)
 cv.imwrite("rawCalibratedImage.png", lampcalib[0])
 calibLampCalib = lampcalib[0][y:y+h, x:x+w]
 cv.imwrite("calibratedImage.png", calibLampCalib)
-
 # REPROJECTION IN ORDER TO BE SURE THIS CALIBRATION IS WORKING
 meanError = 0
 for i in range(len(objpoints)):
@@ -228,14 +254,31 @@ print("total error: {}".format(meanError/len(objpoints)))
 # UNLESS I BOTHER TO IMPLEMENT A MORE ELEGANT SOLUTION
 # LIGHT CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
 # HARDCODING CALIBRATION COORDINATES IS REALLY UNHEALTHY IN PYTHON
-imgPoints = [np.float32([[499, 81],[534, 36],
-            [168, 40],[168, 69],
-            [489, 930],[515, 971],
-            [163, 865],[163, 892]])]
-objPoints = [np.float32([[470.448 - 397.034, 241.187 + 229.608, 70.0],[397.034 - 397.034, 231.625 + 229.608, 0.0],
-            [752.245 - 397.034, 307.869 + 229.608, 70.0],[667.416 - 397.034, 295.374 + 229.608, 0.0],
-            [479.73 - 397.034, -220.556 + 229.608, 70.0],[406.089 - 397.034, -211.845 + 229.608, 0.0],
-            [753.028 - 397.034, -229.608 + 229.608, 70.0], [667.474 - 397.034, -220.295 + 229.608, 0.0]])]
+ObjTipPoints = np.array([
+	[397, 231.69, 70],
+	[667.29, 295.08, 70],
+	[405.93, -211.62, 70],
+	[667.35, -220.34, 70]
+])
+ImgTipPoints = np.array([
+    lampcalib[0][155-y, 883-x], lampcalib[0][506-y, 958-x],
+    lampcalib[0][524-y, 26-x], lampcalib[0][161-y, 24-x]
+])
+ObjShadowPoints = np.array([
+    [471.29, 241.51, 0],
+	[751.89, 307.75, 0],
+	[479.86, -220.88, 0],
+	[752.71, -229.41, 0]
+])
+ImgShadowPoints = np.array([
+    lampcalib[0][156-y, 855-x], lampcalib[0][475-y, 921-x],
+    lampcalib[0][490-y, 70-x], lampcalib[0][160-y, 58-x]
+])
+
+pointDiffs = ObjTipPoints - ObjShadowPoints
+print(pointDiffs)
+
+lightPoint = nearestIntersection(ObjTipPoints, pointDiffs)
 
 # TO DO: INTERCEPT ALL THESE POINTS
 # REAL LIFE POINTS ARE THE ONES WHO MATTER, MUST EXTRACT VALUES FROM imgPoints

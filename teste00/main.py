@@ -17,6 +17,25 @@ class NumpyArrayEncoder(json.JSONEncoder):
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)
 
+def getLineIntersection(a1, a2, b1, b2):
+    """ 
+    Returns the point of intersection of the lines passing through a2,a1 and b2,b1.
+    a1: [x, y] a point on the first line
+    a2: [x, y] another point on the first line
+    b1: [x, y] a point on the second line
+    b2: [x, y] another point on the second line
+    """
+    s = np.vstack([a1,a2,b1,b2])        # s for stacked
+    h = np.hstack((s, np.ones((4, 1)))) # h for homogeneous
+    l1 = np.cross(s[0], s[1])           # get first line
+    l2 = np.cross(s[2], s[3])           # get second line
+    x, y, z = np.cross(l1, l2)          # point of intersection
+    if w == 0:                          # lines are parallel
+        return (float('inf'), float('inf'))
+    print(str(x) + ' ' + str(y) + ' ' + str(z))
+    return (x, y, z)
+
+
 # GET COLOR MAGNITUDE FROM PIXEL
 def getColorMagnitude(pixel):
     return (int(pixel[0]) + int(pixel[1]) + int(pixel[2]))//3
@@ -159,13 +178,6 @@ objp[:,:2] = np.mgrid[0:7,0:6].T.reshape(-1,2)
 objpoints =[] 
 imgpoints = []
 
-'''imgPoints_camera = [np.float32([[266, 182], [330, 182], [395, 181], [459, 180], [524, 180], [589, 180], [654, 179],
-                   [259, 224], [324, 224], [390, 224], [458, 224], [524, 223], [591, 223], [659, 223],
-                   [249, 271], [317, 270], [387, 270], [456, 270], [525, 269], [593, 269], [663, 269]])]
-objPoints_camera = [np.float32([[0,0,0],[0,10,0],[0,20,0],[0,30,0],[0,40,0],[0,50,0],[0,60,0],
-                   [10,0,0],[10,10,0],[10,20,0],[10,30,0],[10,40,0],[10,50,0],[10,60,0],
-                   [20,0,0],[20,10,0],[20,20,0],[20,30,0],[20,40,0],[20,50,0],[20,60,0]])]'''
-
 ret, corners = cv.findChessboardCorners(camcalib[0], (7, 6), None)
 if ret == True:
     objpoints.append(objp)
@@ -236,15 +248,22 @@ objPoints = [np.float32([[470.448 - 397.034, 241.187 + 229.608, 70.0],[397.034 -
             [752.245 - 397.034, 307.869 + 229.608, 70.0],[667.416 - 397.034, 295.374 + 229.608, 0.0],
             [479.73 - 397.034, -220.556 + 229.608, 70.0],[406.089 - 397.034, -211.845 + 229.608, 0.0],
             [753.028 - 397.034, -229.608 + 229.608, 70.0], [667.474 - 397.034, -220.295 + 229.608, 0.0]])]
-dst = cv.cornerHarris(calibLampCalib, 2, 3, 0.04)
-# Threshold for an optimal value, it may vary depending on the image.
-calibLampCalib[dst>0.01*dst.max()]=255
-#result is dilated for marking the corners, not important
-dst = cv.dilate(calibLampCalib,None)
-plt.imshow(calibLampCalib, cmap='gray')
-plt.show()
-
+#dst = cv.cornerHarris(calibLampCalib, 2, 3, 0.04)
+#dst = cv.dilate(dst,None)
+#calibLampCalib[dst>0.01*dst.max()]=255
+#plt.imshow(calibLampCalib, cmap='gray')
+#plt.show()
 lightLines = []
+for i in range(0, objPoints[0].size//3, 2):
+    points = (objPoints[0][i], objPoints[0][i+1])
+    l, m, n = points[0][0] - points[1][0], points[0][1] - points[1][1], points[0][2] - points[1][2]
+    lightLine = (l, m, n)
+    lightLines.append(lightLine)
+print(lightLines)
+getLineIntersection(objPoints[0][0], objPoints[0][1], objPoints[0][2], objPoints[0][3])
+getLineIntersection(objPoints[0][0], objPoints[0][1], objPoints[0][4], objPoints[0][5])
+getLineIntersection(objPoints[0][0], objPoints[0][1], objPoints[0][6], objPoints[0][7])
+getLineIntersection(objPoints[0][2], objPoints[0][3], objPoints[0][4], objPoints[0][5])
 # TO DO: INTERCEPT ALL THESE POINTS
 # REAL LIFE POINTS ARE THE ONES WHO MATTER, MUST EXTRACT VALUES FROM imgPoints
 # 1. CONVERT imgPoints TO OBJECT POINTS (multiply with camera matrix mtx?)
