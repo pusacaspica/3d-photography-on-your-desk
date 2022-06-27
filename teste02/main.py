@@ -255,20 +255,20 @@ print("total error: {}".format(meanError/len(objpoints)))
 # LIGHT CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
 # HARDCODING CALIBRATION COORDINATES IS REALLY UNHEALTHY IN PYTHON
 ObjTipPoints = np.array([
-	[397, 231.69, 70],
-	[667.29, 295.08, 70],
-	[405.93, -211.62, 70],
-	[667.35, -220.34, 70]
+	np.array([397, 231.69, 70]),
+	np.array([667.29, 295.08, 70]),
+	np.array([405.93, -211.62, 70]),
+	np.array([667.35, -220.34, 70])
 ])
 ImgTipPoints = np.array([
     lampcalib[0][155-y, 883-x], lampcalib[0][506-y, 958-x],
     lampcalib[0][524-y, 26-x], lampcalib[0][161-y, 24-x]
 ])
 ObjShadowPoints = np.array([
-    [471.29, 241.51, 0],
-	[751.89, 307.75, 0],
-	[479.86, -220.88, 0],
-	[752.71, -229.41, 0]
+    np.array([471.29, 241.51, 0]),
+	np.array([751.89, 307.75, 0]),
+	np.array([479.86, -220.88, 0]),
+	np.array([752.71, -229.41, 0])
 ])
 ImgShadowPoints = np.array([
     lampcalib[0][156-y, 855-x], lampcalib[0][475-y, 921-x],
@@ -276,9 +276,28 @@ ImgShadowPoints = np.array([
 ])
 
 pointDiffs = ObjTipPoints - ObjShadowPoints
-print(pointDiffs)
+print(type(pointDiffs))
 
-lightPoint = nearestIntersection(ObjTipPoints, pointDiffs)
+print(mtx)
+
+leftmost = np.transpose(np.concatenate(([pointDiffs[0]], [-1*pointDiffs[1]])))
+print(leftmost)
+rightmost = np.transpose(ObjTipPoints[0] - ObjTipPoints[1])
+print(rightmost)
+intersec = np.linalg.inv(leftmost).dot(rightmost)
+print(intersec)
+
+'''a = np.transpose(np.reshape(np.concatenate((ObjTipPoints[0], pointDiffs[0], np.array([1, 1, 1]))), (3, 3)))
+b = np.transpose(np.reshape(np.concatenate((ObjShadowPoints[1], pointDiffs[1], np.array([1, 1, 1]))), (3, 3)))
+print(a)
+print(b)
+c = np.linalg.solve(a, b)
+d = np.linalg.solve(b, a)
+print(c)
+print(d)
+
+print(np.dot(a, c[:,0]))'''
+#lightPoint = nearestIntersection(ObjTipPoints, pointDiffs)
 
 # TO DO: INTERCEPT ALL THESE POINTS
 # REAL LIFE POINTS ARE THE ONES WHO MATTER, MUST EXTRACT VALUES FROM imgPoints
