@@ -9,107 +9,113 @@ import numpy
 import numpy as np
 import matplotlib.pyplot as plt
 
-#np.set_printoptions(threshold=sys.maxsize)
-def nearestIntersection(points, diffs):
-    """
-    :param points: (N, 3) array of points on the lines
-    :param dirs: (N, 3) array of unit direction vectors
-    :returns: (3,) array of intersection point
-    """
-    dirs_mat = diffs[:, :, np.newaxis] @ diffs[:, np.newaxis, :]
-    points_mat = points[:, :, np.newaxis]
-    I = np.eye(3)
-    return np.linalg.lstsq(
-        (I - dirs_mat).sum(axis=0),
-        ((I - dirs_mat) @ points_mat).sum(axis=0),
-        rcond=None
-    )[0]
-
-def getLineIntersection(a1, a2, b1, b2):
-    """ 
-    Returns the point of intersection of the lines passing through a2,a1 and b2,b1.
-    a1: [x, y] a point on the first line
-    a2: [x, y] another point on the first line
-    b1: [x, y] a point on the second line
-    b2: [x, y] another point on the second line
-    """
-    s = np.vstack([a1,a2,b1,b2])        # s for stacked
-    print(s)
-    h = np.hstack((s, np.ones((4, 1)))) # h for homogeneous
-    l1 = np.cross(s[0], s[1])           # get first line
-    l2 = np.cross(s[2], s[3])           # get second line
-    x, y, z = np.cross(l1, l2)          # point of intersection
-    if w == 0:                          # lines are parallel
-        return (float('inf'), float('inf'))
-    print(str(x) + ' ' + str(y) + ' ' + str(z))
-    return (x, y, z)
-
 class NumpyArrayEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, numpy.ndarray):
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)
 
+# GET CLOSEST DISTANCE BETWEEN LINES EXTENDING TO INFINITY AND BEYOND
+# FUNCTION BY Fnord ON STACK OVERFLOW: https://stackoverflow.com/questions/2824478/shortest-distance-between-two-line-segments
+def closestDistanceBetweenLines(a0,a1,b0,b1,clampAll=False,clampA0=False,clampA1=False,clampB0=False,clampB1=False):
+    ''' Given two lines defined by numpy.array pairs (a0,a1,b0,b1)
+        Return the closest points on each segment and their distance
+    '''
+    # If clampAll=True, set all clamps to True
+    if clampAll:
+        clampA0=True
+        clampA1=True
+        clampB0=True
+        clampB1=True
+
+    # Calculate denomitator
+    A = a1 - a0
+    B = b1 - b0
+    magA = np.linalg.norm(A)
+    magB = np.linalg.norm(B)
+    
+    _A = A / magA
+    _B = B / magB
+    
+    cross = np.cross(_A, _B);
+    denom = np.linalg.norm(cross)**2
+    
+    # If lines are parallel (denom=0) test if lines overlap.
+    # If they don't overlap then there is a closest point solution.
+    # If they do overlap, there are infinite closest positions, but there is a closest distance
+    if not denom:
+        d0 = np.dot(_A,(b0-a0))
+        
+        # Overlap only possible with clamping
+        if clampA0 or clampA1 or clampB0 or clampB1:
+            d1 = np.dot(_A,(b1-a0))
+            
+            # Is segment B before A?
+            if d0 <= 0 >= d1:
+                if clampA0 and clampB1:
+                    if np.absolute(d0) < np.absolute(d1):
+                        return a0,b0,np.linalg.norm(a0-b0)
+                    return a0,b1,np.linalg.norm(a0-b1)
+                
+            # Is segment B after A?
+            elif d0 >= magA <= d1:
+                if clampA1 and clampB0:
+                    if np.absolute(d0) < np.absolute(d1):
+                        return a1,b0,np.linalg.norm(a1-b0)
+                    return a1,b1,np.linalg.norm(a1-b1) 
+                
+        # Segments overlap, return distance between parallel segments
+        return None,None,np.linalg.norm(((d0*_A)+a0)-b0)
+    
+    # Lines criss-cross: Calculate the projected closest points
+    t = (b0 - a0);
+    detA = np.linalg.det([t, _B, cross])
+    detB = np.linalg.det([t, _A, cross])
+
+    t0 = detA/denom;
+    t1 = detB/denom;
+
+    pA = a0 + (_A * t0) # Projected closest point on segment A
+    pB = b0 + (_B * t1) # Projected closest point on segment B
+
+    # Clamp projections
+    if clampA0 or clampA1 or clampB0 or clampB1:
+        if clampA0 and t0 < 0:
+            pA = a0
+        elif clampA1 and t0 > magA:
+            pA = a1
+        
+        if clampB0 and t1 < 0:
+            pB = b0
+        elif clampB1 and t1 > magB:
+            pB = b1
+            
+        # Clamp projection A
+        if (clampA0 and t0 < 0) or (clampA1 and t0 > magA):
+            dot = np.dot(_B,(pA-b0))
+            if clampB0 and dot < 0:
+                dot = 0
+            elif clampB1 and dot > magB:
+                dot = magB
+            pB = b0 + (_B * dot)
+    
+        # Clamp projection B
+        if (clampB0 and t1 < 0) or (clampB1 and t1 > magB):
+            dot = np.dot(_A,(pB-a0))
+            if clampA0 and dot < 0:
+                dot = 0
+            elif clampA1 and dot > magA:
+                dot = magA
+            pA = a0 + (_A * dot)
+
+    midpoint = pA*0.5+pB*0.5
+    print("midpoint: "+str(midpoint))
+    
+    return pA,pB,midpoint,np.linalg.norm(pA-pB)
+
 # GET COLOR MAGNITUDE FROM PIXEL
 def getColorMagnitude(pixel):
     return (int(pixel[0]) + int(pixel[1]) + int(pixel[2]))//3
-
-def getPxMax(imgs, x, y):
-    #np.max(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])])
-    return np.max(imgs[:][0].item(y,x))
-
-def getPxMin(imgs, x, y):
-    #np.min(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])])
-    return np.min(imgs[:][0].item(y,x))
-
-def getPxShadow(imgs, x, y):
-    return (int(getPxMax(imgs, x, y)) + int(getPxMin(imgs, x, y)))//2
-
-def delta(imgs, img, x, y):
-    return abs(img[y, x] - ((getPxMin(imgs, x, y) + getPxMax(imgs, x, y))//2))
-
-# GIVEN A SET OF CONTOUR IMAGES
-# AND A PAIR OF TOP AND BOTTOM Y POSITIONS
-# WHERE, IN THE X-AXIS, IS LOCATED THE SHADOW EDGE?
-def spatialLocation(imgs, ytop, ybottom):
-    spatial = []
-    top = int(ytop)
-    bot = int(ybottom)
-    for img in imgs:
-        if(np.nonzero(img[top])[0].size < 2):
-            topContour = -1
-        else:
-            topContour = np.nonzero(img[top])[0].ravel()[0]
-        if(np.nonzero(img[bot])[0].size < 2):
-            bottomContour = -1
-        else:
-            bottomContour = np.nonzero(img[bot])[0].ravel()[0]
-        spatial.append((topContour, bottomContour))
-    return spatial
-
-
-# RETURN FRAME IN WHICH THE FRAME IS REACHED BY SHADOW
-# TIME -1 MEANS THAT IT IS OUT OF BOUNDS OF THE SCAN
-def shadowTime(imgs, x, y, thresh):
-    if int(x) == imgs[0].shape[1]:
-        return -1
-    for i, img in enumerate(imgs):
-        if (delta(imgs, img, x, y)) > thresh:
-            if i == (len(imgs)-1):
-                return -1
-            else:
-                return i
-    return shadowTime(imgs, x+1, y, thresh)
-        
-# PAINTS EVERY FRAME TAKING PIXEL DEPTH IN CONSIDERATION; IF IT PAINTS IN bottom, FRAME DOESN'T CONTRIBUTE TO DEPTH
-# PRINTS A NEW IMAGE TO BE PLOTTED
-# USED ONLY FOR DEBUGGING, NOT MEANT TO WORK WITHIN THE ALGORITHM DESCRIBED.
-def imageDelta(imgs, thresh, bottom):
-    timeslice = np.zeros(imgs[0].shape, dtype=np.uint8)
-    timeslices = np.array([timeslice]*50)
-    # My life has been forever changed by the next line
-    timeslices[0:len(imgs), 0:imgs[0].shape[0], 0:imgs[0].shape[1]] = np.where(abs(np.array(imgs[0:len(imgs)])[0:imgs[0].shape[0], 0:imgs[0].shape[1]] - (np.max(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])]) + np.min(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])])//2)) > thresh, np.array(imgs[0:len(imgs)])[0:imgs[0].shape[0], 0:imgs[0].shape[1]] - (np.max(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])]) + np.min(np.array(imgs[0:len(imgs)])[0:int(imgs[0].shape[0]), 0:int(imgs[0].shape[1])])//[2])[0], np.uint8(bottom))
-    return timeslices
 
 def paintY(img, x):
     img[x, 0:img.shape[1]] = 125
@@ -143,6 +149,25 @@ def optDeltas(imgs):
     for i, img in enumerate(imgs):
         deltas[i, 0:img.shape[0], 0:img.shape[1]] = (imgs[i, 0:img.shape[0], 0:img.shape[1]] - (optShadow(imgs)))
     return optMax(deltas)
+    
+# GIVEN A SET OF CONTOUR IMAGES
+# AND A PAIR OF TOP AND BOTTOM Y POSITIONS
+# WHERE, IN THE X-AXIS, IS LOCATED THE SHADOW EDGE?
+def spatialLocation(imgs, ytop, ybottom):
+    spatial = []
+    top = int(ytop)
+    bot = int(ybottom)
+    for img in imgs:
+        if(np.nonzero(img[top])[0].size < 2):
+            topContour = -1
+        else:
+            topContour = np.nonzero(img[top])[0].ravel()[0]
+        if(np.nonzero(img[bot])[0].size < 2):
+            bottomContour = -1
+        else:
+            bottomContour = np.nonzero(img[bot])[0].ravel()[0]
+        spatial.append((topContour, bottomContour))
+    return spatial
 
 def optShadowTime(imgs, deltas, thresh):
     ret = np.zeros((imgs[0].shape[0], imgs[0].shape[1]))
@@ -253,7 +278,7 @@ print("total error: {}".format(meanError/len(objpoints)))
 # LIGHT CALIBRATION
 # UNLESS I BOTHER TO IMPLEMENT A MORE ELEGANT SOLUTION
 # LIGHT CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
-# HARDCODING CALIBRATION COORDINATES IS REALLY UNHEALTHY IN PYTHON
+# still need to fix these coordinates, for some reason they are way off
 ObjTipPoints = np.array([
 	np.array([397, 231.69, 70]),
 	np.array([667.29, 295.08, 70]),
@@ -275,35 +300,36 @@ ImgShadowPoints = np.array([
     lampcalib[0][490-y, 70-x], lampcalib[0][160-y, 58-x]
 ])
 
-pointDiffs = ObjTipPoints - ObjShadowPoints
-print(type(pointDiffs))
+# LIGHT CALIBRATION
+midpoints = []
+_, _, midpoint1, _ = closestDistanceBetweenLines(ObjTipPoints[0], ObjShadowPoints[0], ObjTipPoints[1], ObjShadowPoints[1])
+_, _, midpoint2, _ = closestDistanceBetweenLines(ObjTipPoints[0], ObjShadowPoints[0], ObjTipPoints[2], ObjShadowPoints[2])
+_, _, midpoint3, _ = closestDistanceBetweenLines(ObjTipPoints[0], ObjShadowPoints[0], ObjTipPoints[3], ObjShadowPoints[3])
+_, _, midpoint4, _ = closestDistanceBetweenLines(ObjTipPoints[1], ObjShadowPoints[1], ObjTipPoints[2], ObjShadowPoints[2])
+_, _, midpoint5, _ = closestDistanceBetweenLines(ObjTipPoints[1], ObjShadowPoints[1], ObjTipPoints[3], ObjShadowPoints[3])
+_, _, midpoint6, _ = closestDistanceBetweenLines(ObjTipPoints[2], ObjShadowPoints[2], ObjTipPoints[3], ObjShadowPoints[3])
+midpoints.append(midpoint1)
+midpoints.append(midpoint2)
+midpoints.append(midpoint3)
+midpoints.append(midpoint4)
+midpoints.append(midpoint5)
+midpoints.append(midpoint6)
+midpoints = np.array(midpoints)
+lightCenterPoint = np.array([np.sum(midpoints[:, 0])/len(midpoints), np.sum(midpoints[:, 1])/len(midpoints), np.sum(midpoints[:, 2])/len(midpoints)])
+print(lightCenterPoint)
 
-print(mtx)
-
-leftmost = np.transpose(np.concatenate(([pointDiffs[0]], [-1*pointDiffs[1]])))
-print(leftmost)
-rightmost = np.transpose(ObjTipPoints[0] - ObjTipPoints[1])
-print(rightmost)
-intersec = np.linalg.inv(leftmost).dot(rightmost)
-print(intersec)
-
-'''a = np.transpose(np.reshape(np.concatenate((ObjTipPoints[0], pointDiffs[0], np.array([1, 1, 1]))), (3, 3)))
-b = np.transpose(np.reshape(np.concatenate((ObjShadowPoints[1], pointDiffs[1], np.array([1, 1, 1]))), (3, 3)))
-print(a)
-print(b)
-c = np.linalg.solve(a, b)
-d = np.linalg.solve(b, a)
-print(c)
-print(d)
-
-print(np.dot(a, c[:,0]))'''
-#lightPoint = nearestIntersection(ObjTipPoints, pointDiffs)
-
-# TO DO: INTERCEPT ALL THESE POINTS
-# REAL LIFE POINTS ARE THE ONES WHO MATTER, MUST EXTRACT VALUES FROM imgPoints
-# 1. CONVERT imgPoints TO OBJECT POINTS (multiply with camera matrix mtx?)
-# 2. ISOLATE THE VECTOR OF THE LINE as seen on http://ramanujan.math.trinity.edu/rdaileda/teach/f20/m2321/lectures/lecture5_slides.pdf
-# 3. USE LEAST SQUARES TO DETECT INTERSECTION
+# DEBUG PLOTTING
+ax = plt.axes(projection='3d')
+ax.plot3D([ObjTipPoints[0, 0], ObjShadowPoints[0, 0]], [ObjTipPoints[0, 1], ObjShadowPoints[0, 1]], [ObjTipPoints[0, 2], ObjShadowPoints[0, 2]], 'green')
+ax.plot3D([ObjTipPoints[1, 0], ObjShadowPoints[1, 0]], [ObjTipPoints[1, 1], ObjShadowPoints[1, 1]], [ObjTipPoints[1, 2], ObjShadowPoints[1, 2]], 'green')
+ax.plot3D([ObjTipPoints[2, 0], ObjShadowPoints[2, 0]], [ObjTipPoints[2, 1], ObjShadowPoints[2, 1]], [ObjTipPoints[2, 2], ObjShadowPoints[2, 2]], 'green')
+ax.plot3D([ObjTipPoints[3, 0], ObjShadowPoints[3, 0]], [ObjTipPoints[3, 1], ObjShadowPoints[3, 1]], [ObjTipPoints[3, 2], ObjShadowPoints[3, 2]], 'green')
+ax.scatter(midpoint1[0], midpoint1[1], midpoint1[2], c= 'green')
+ax.scatter(midpoint2[0], midpoint2[1], midpoint2[2], c= 'green')
+ax.scatter(midpoint3[0], midpoint3[1], midpoint3[2], c= 'green')
+ax.scatter(midpoint4[0], midpoint4[1], midpoint4[2], c= 'green')
+ax.scatter(lightCenterPoint[0], lightCenterPoint[1], lightCenterPoint[2])
+plt.show()
 
 
 # SHADOW MAPPING
