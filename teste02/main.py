@@ -280,20 +280,20 @@ print("total error: {}".format(meanError/len(objpoints)))
 # LIGHT CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
 # still need to fix these coordinates, for some reason they are way off
 ObjTipPoints = np.array([
-	np.array([397, 231.69, 70]),
-	np.array([667.29, 295.08, 70]),
-	np.array([405.93, -211.62, 70]),
-	np.array([667.35, -220.34, 70])
+	np.array([397 - 397, 231.69 + 229.41, 70]),
+	np.array([667.29 - 397, 295.08 + 229.41, 70]),
+	np.array([405.93 - 397, -211.62 + 229.41, 70]),
+	np.array([667.35 - 397, -220.34 + 229.41, 70])
 ])
 ImgTipPoints = np.array([
     lampcalib[0][155-y, 883-x], lampcalib[0][506-y, 958-x],
     lampcalib[0][524-y, 26-x], lampcalib[0][161-y, 24-x]
 ])
 ObjShadowPoints = np.array([
-    np.array([471.29, 241.51, 0]),
-	np.array([751.89, 307.75, 0]),
-	np.array([479.86, -220.88, 0]),
-	np.array([752.71, -229.41, 0])
+    np.array([471.29 - 397, 241.51 + 229.41, 0]),
+	np.array([751.89 - 397, 307.75 + 229.41, 0]),
+	np.array([479.86 - 397, -220.88 + 229.41, 0]),
+	np.array([752.71 - 397, -229.41 + 229.41, 0])
 ])
 ImgShadowPoints = np.array([
     lampcalib[0][156-y, 855-x], lampcalib[0][475-y, 921-x],
