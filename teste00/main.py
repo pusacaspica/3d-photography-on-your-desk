@@ -113,6 +113,27 @@ def closestDistanceBetweenLines(a0,a1,b0,b1,clampAll=False,clampA0=False,clampA1
     
     return pA,pB,midpoint,np.linalg.norm(pA-pB)
 
+def getPlaneFromThreePoints(pt1, pt2, pt3, homogeneize=False):
+    ''' Given three points defined by numpy.array triples (X, Y, Z)
+        Return the matrix definition of the correspondent plane and the correspondent normal
+    '''
+    line1 = pt2 - pt1
+    line2 = pt3 - pt1
+    normal = np.cross(line2, line1)
+    planeD = np.array([normal[0] * line1[1] + normal[1] * line1[0] + normal[2] * line1[2]])
+    print("PlaneD: "+str(planeD))
+    #if(planeD == 0):
+    #    print("pt1: "+str(pt1)+"; pt2: "+str(pt2)+"; pt3: "+str(pt3))
+    plane = np.concatenate((normal, planeD))
+    if(homogeneize == False):
+        return plane, normal
+    else:
+        if(np.abs(planeD[0]) > 0):
+            return plane/planeD[0], normal
+        else:
+            return plane, normal
+
+
 # GET COLOR MAGNITUDE FROM PIXEL
 def getColorMagnitude(pixel):
     return (int(pixel[0]) + int(pixel[1]) + int(pixel[2]))//3
@@ -280,20 +301,20 @@ print("total error: {}".format(meanError/len(objpoints)))
 # LIGHT CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
 # HARDCODING CALIBRATION COORDINATES IS REALLY UNHEALTHY IN PYTHON
 ObjTipPoints = np.array([
-	np.array([397, 231.69, 70]),
-	np.array([667.29, 295.08, 70]),
-	np.array([405.93, -211.62, 70]),
-	np.array([667.35, -220.34, 70])
+	np.array([397 - 397, 231.69 + 229.41, 70])*0.01,
+	np.array([667.29-397, 295.08 + 229.41, 70])*0.01,
+	np.array([405.93-397, -211.62 + 229.41, 70])*0.01,
+	np.array([667.35-397, -220.34 + 229.41, 70])*0.01
 ])
 ImgTipPoints = np.array([
     lampcalib[0][155-y, 883-x], lampcalib[0][506-y, 958-x],
     lampcalib[0][524-y, 26-x], lampcalib[0][161-y, 24-x]
 ])
 ObjShadowPoints = np.array([
-    np.array([471.29, 241.51, 0]),
-	np.array([751.89, 307.75, 0]),
-	np.array([479.86, -220.88, 0]),
-	np.array([752.71, -229.41, 0])
+    np.array([471.29-397, 241.51 + 229.41, 0])*0.01,
+	np.array([751.89-397, 307.75 + 229.41, 0])*0.01,
+	np.array([479.86-397, -220.88 + 229.41, 0])*0.01,
+	np.array([752.71-397, -229.41 + 229.41, 0])*0.01
 ])
 ImgShadowPoints = np.array([
     lampcalib[0][156-y, 855-x], lampcalib[0][475-y, 921-x],
@@ -346,10 +367,29 @@ cannyImgs = np.array(cannyImgs)
 # DETECT SHADOW BEHAVIOUR ON PLANE
 # IF USING UNCALIBRATED IMAGES FOR CANNY, USE ytop AND ybottom
 # IF USING CALIBRATED IMAGES, USE int(h * (ytop/imgs[0].shape[0])) AND int(h * (ybottom/imgs[0].shape[0]))
-spatial = spatialLocation(cannyImgs, int(h * (ytop/imgs[0].shape[0])), int(h * (ybottom/imgs[0].shape[0])))
-print(spatial)
-plt.imshow(cannyImgs[0], cmap='gray')
-plt.show()
+ybottom = int(h * (ybottom/imgs[0].shape[0]))
+ytop = int(h * (ytop/imgs[0].shape[0]))
+spatial = spatialLocation(cannyImgs, ytop, ybottom)
+#print(spatial)
+#plt.imshow(cannyImgs[34], cmap='gray')
+#plt.show()
+shadowPlanes = []
+for i, line in enumerate(spatial):
+    plane = getPlaneFromThreePoints(lightCenterPoint, np.array([ytop, line[0], 1.0]), np.array([ybottom, line[1], 1.0]))
+    print(plane)
+    shadowPlanes.append(plane)
+    x = np.linspace(-20, 35, 100)
+    y = np.linspace(-20, 35, 100)
+    x, y = np.meshgrid(x, y)
+    eq = plane[0][0]*x + plane[0][1]*y + plane[0][2]
+    plnPlot = plt.figure().gca(projection='3d')
+    plnPlot.plot3D([ObjTipPoints[0, 0], ObjShadowPoints[0, 0]], [ObjTipPoints[0, 1], ObjShadowPoints[0, 1]], [ObjTipPoints[0, 2], ObjShadowPoints[0, 2]], 'green')
+    plnPlot.plot3D([ObjTipPoints[1, 0], ObjShadowPoints[1, 0]], [ObjTipPoints[1, 1], ObjShadowPoints[1, 1]], [ObjTipPoints[1, 2], ObjShadowPoints[1, 2]], 'green')
+    plnPlot.plot3D([ObjTipPoints[2, 0], ObjShadowPoints[2, 0]], [ObjTipPoints[2, 1], ObjShadowPoints[2, 1]], [ObjTipPoints[2, 2], ObjShadowPoints[2, 2]], 'green')
+    plnPlot.plot3D([ObjTipPoints[3, 0], ObjShadowPoints[3, 0]], [ObjTipPoints[3, 1], ObjShadowPoints[3, 1]], [ObjTipPoints[3, 2], ObjShadowPoints[3, 2]], 'green')
+    plnPlot.scatter(lightCenterPoint[0], lightCenterPoint[1], lightCenterPoint[2])
+    plnPlot.plot_surface(x, y, eq)
+    plt.show()
 # NOT DONE YET
 # SHADOW PLANES MUST BE ESTIMATED
 # CAN ONLY BE DONE WHEN LIGHT CALIBRATION IS DONE
