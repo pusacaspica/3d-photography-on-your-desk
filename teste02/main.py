@@ -37,7 +37,7 @@ def closestDistanceBetweenLines(a0,a1,b0,b1,clampAll=False,clampA0=False,clampA1
     _A = A / magA
     _B = B / magB
     
-    cross = np.cross(_A, _B);
+    cross = np.cross(_A, _B)
     denom = np.linalg.norm(cross)**2
     
     # If lines are parallel (denom=0) test if lines overlap.
@@ -68,12 +68,12 @@ def closestDistanceBetweenLines(a0,a1,b0,b1,clampAll=False,clampA0=False,clampA1
         return None,None,np.linalg.norm(((d0*_A)+a0)-b0)
     
     # Lines criss-cross: Calculate the projected closest points
-    t = (b0 - a0);
+    t = (b0 - a0)
     detA = np.linalg.det([t, _B, cross])
     detB = np.linalg.det([t, _A, cross])
 
-    t0 = detA/denom;
-    t1 = detB/denom;
+    t0 = detA/denom
+    t1 = detB/denom
 
     pA = a0 + (_A * t0) # Projected closest point on segment A
     pB = b0 + (_B * t1) # Projected closest point on segment B
@@ -109,9 +109,42 @@ def closestDistanceBetweenLines(a0,a1,b0,b1,clampAll=False,clampA0=False,clampA1
             pA = a0 + (_A * dot)
 
     midpoint = pA*0.5+pB*0.5
-    print("midpoint: "+str(midpoint))
     
     return pA,pB,midpoint,np.linalg.norm(pA-pB)
+
+def getPlaneFromThreePoints(pt1, pt2, pt3, homogeneize=False):
+    ''' Given three points defined by numpy.array triples (X, Y, Z)
+        Return the matrix definition of the correspondent plane and the correspondent normal
+    '''
+    line1 = pt2 - pt1
+    line2 = pt3 - pt1
+    normal = np.cross(line1, line2)
+    planeD = np.array([np.dot(normal, pt1)])
+    print("PlaneD: "+str(planeD))
+    #if(planeD == 0):
+    #    print("pt1: "+str(pt1)+"; pt2: "+str(pt2)+"; pt3: "+str(pt3))
+    plane = np.concatenate((normal, planeD))
+    if(homogeneize == False):
+        return plane, normal
+    else:
+        if(np.abs(planeD[0]) > 0):
+            return plane/planeD[0], normal, planeD
+        else:
+            return plane, normal
+
+# GET OBJECT POINT IN IMAGE POINT ONCE EXTRINSIC PARAMETERS ARE KNOWN
+# HEAVILY BASED ON Milo's EXPLANATION AT https://stackoverflow.com/questions/14514357/converting-a-2d-image-point-to-a-3d-world-point
+def getObjectPointFromImagePoint(imagePoint, rvecs, tvecs, tabletop = False, height = 70):
+    dCoords = np.dot( rvecs , imagePoint )
+    tCoords = np.dot(rvecs , -np.array([1, 1, 1]))
+    print("t: "+str(tCoords))
+    print("d: "+str(dCoords))
+    x = (-tCoords[2]/dCoords[2]) * dCoords[0] + tCoords[0]
+    y = (-tCoords[2]/dCoords[2]) * dCoords[1] + tCoords[1]
+    if (tabletop == True):
+        return np.array([x, y, 0])
+    else:
+        return np.array([x, y, height])
 
 # GET COLOR MAGNITUDE FROM PIXEL
 def getColorMagnitude(pixel):
@@ -217,13 +250,6 @@ objp[:,:2] = np.mgrid[0:7,0:6].T.reshape(-1,2)
 objpoints =[] 
 imgpoints = []
 
-'''imgPoints_camera = [np.float32([[266, 182], [330, 182], [395, 181], [459, 180], [524, 180], [589, 180], [654, 179],
-                   [259, 224], [324, 224], [390, 224], [458, 224], [524, 223], [591, 223], [659, 223],
-                   [249, 271], [317, 270], [387, 270], [456, 270], [525, 269], [593, 269], [663, 269]])]
-objPoints_camera = [np.float32([[0,0,0],[0,10,0],[0,20,0],[0,30,0],[0,40,0],[0,50,0],[0,60,0],
-                   [10,0,0],[10,10,0],[10,20,0],[10,30,0],[10,40,0],[10,50,0],[10,60,0],
-                   [20,0,0],[20,10,0],[20,20,0],[20,30,0],[20,40,0],[20,50,0],[20,60,0]])]'''
-
 ret, corners = cv.findChessboardCorners(camcalib[0], (7, 6), None)
 if ret == True:
     objpoints.append(objp)
@@ -233,25 +259,37 @@ if ret == True:
     plt.imshow(camcalib[0], cmap='gray')
     plt.show()'''
 
+# print(objpoints)
+
 corners = np.array(corners)
 corners = corners.reshape(corners.shape[0], corners.shape[2])
 objpoints = np.array(objpoints)
 imgpoints = np.array(imgpoints)
 imgpoints = imgpoints.reshape(imgpoints.shape[2], imgpoints.shape[1],imgpoints.shape[3])
+#print(corners.shape)
+#print(objpoints.shape)
+#print(imgpoints.shape)
 ret, mtx, dist, rvecs, tvecs = cv.calibrateCamera(objpoints, imgpoints, camcalib[0].shape[::-1], None, None)
+rmat,jacobian = cv.Rodrigues(rvecs[0])
+invRvecs = np.diagonal(np.linalg.inv(rvecs[0].ravel() * np.eye(3)))
+invrmat = np.linalg.inv(rmat)
+print("Rotation matrix: "+str(rmat))
+print("Translation vector: "+str(tvecs))
 
-plotx = ploty = np.linspace(-100, 100, 100)
+plotx = np.linspace(-10, 10)
+ploty = np.linspace(-200, 200)
 plotx, ploty = np.meshgrid(plotx, ploty)
-eq = rvecs[0][0] * (plotx-tvecs[0][0]) + rvecs[0][1] * (ploty-tvecs[0][1]) + rvecs[0][2]*(-tvecs[0][2])
-fg = plt.figure()
-ax = fg.gca(projection='3d')
-ax.plot_surface(plotx, ploty, eq)
+print(plotx.shape)
+tb = (invRvecs[0] * (plotx-tvecs[0][0]) + invRvecs[1] * (ploty-tvecs[0][1])) / invRvecs[2]#*(-tvecs[0][2])
+ax = plt.figure().add_subplot(projection='3d')
+ax.plot_surface(plotx, ploty, tb - tvecs[0][2])
+ax.scatter(0, 0, 0, c='red')
 plt.show()
-
 
 h, w = camcalib[0].shape[:2]
 optMtx, roi = cv.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
 x, y, w, h = roi
+# print(roi)
 lampcalib[0] = cv.undistort(lampcalib[0], mtx, dist, None, optMtx)
 
 # UNDISTORTION
@@ -263,6 +301,7 @@ calibImgs = np.array(calibImgs)
 cv.imwrite("rawCalibratedImage.png", lampcalib[0])
 calibLampCalib = lampcalib[0][y:y+h, x:x+w]
 cv.imwrite("calibratedImage.png", calibLampCalib)
+
 # REPROJECTION IN ORDER TO BE SURE THIS CALIBRATION IS WORKING
 meanError = 0
 for i in range(len(objpoints)):
@@ -275,31 +314,79 @@ for i in range(len(objpoints)):
     meanError += error
 print("total error: {}".format(meanError/len(objpoints)))
 
+
 # LIGHT CALIBRATION
 # UNLESS I BOTHER TO IMPLEMENT A MORE ELEGANT SOLUTION
 # LIGHT CALIBRATION COORDINATES WILL BE HARDCODED UNTIL THEN THEN
-# still need to fix these coordinates, for some reason they are way off
-ObjTipPoints = np.array([
-	np.array([397 - 397, 231.69 + 229.41, 70]),
-	np.array([667.29 - 397, 295.08 + 229.41, 70]),
-	np.array([405.93 - 397, -211.62 + 229.41, 70]),
-	np.array([667.35 - 397, -220.34 + 229.41, 70])
-])
-ImgTipPoints = np.array([
-    lampcalib[0][155-y, 883-x], lampcalib[0][506-y, 958-x],
-    lampcalib[0][524-y, 26-x], lampcalib[0][161-y, 24-x]
-])
-ObjShadowPoints = np.array([
-    np.array([471.29 - 397, 241.51 + 229.41, 0]),
-	np.array([751.89 - 397, 307.75 + 229.41, 0]),
-	np.array([479.86 - 397, -220.88 + 229.41, 0]),
-	np.array([752.71 - 397, -229.41 + 229.41, 0])
+# HARDCODING CALIBRATION COORDINATES IS REALLY UNHEALTHY IN PYTHON
+print(calibImgs[0].shape)
+'''ImgTipPoints = np.array([
+    lampcalib[0][155-y - calibImgs[0].shape[0]//2, 883-x - calibImgs[0].shape[1]//2], lampcalib[0][506-y - calibImgs[0].shape[0]//2, 958-x - calibImgs[0].shape[1]//2],
+    lampcalib[0][524-y - calibImgs[0].shape[0]//2, 26-x - calibImgs[0].shape[1]//2], lampcalib[0][161-y - calibImgs[0].shape[0]//2, 24-x - calibImgs[0].shape[1]//2]
 ])
 ImgShadowPoints = np.array([
-    lampcalib[0][156-y, 855-x], lampcalib[0][475-y, 921-x],
-    lampcalib[0][490-y, 70-x], lampcalib[0][160-y, 58-x]
+    lampcalib[0][156-y - calibImgs[0].shape[0]//2, 855-x - calibImgs[0].shape[1]//2], lampcalib[0][475-y - calibImgs[0].shape[0]//2, 921-x - calibImgs[0].shape[1]//2],
+    lampcalib[0][490-y - calibImgs[0].shape[0]//2, 70-x - calibImgs[0].shape[1]//2], lampcalib[0][160-y - calibImgs[0].shape[0]//2, 58-x - calibImgs[0].shape[1]//2]
+])'''
+ImgTipPoints = np.array([
+    np.array([155,  883, 1]), np.array([506 , 958, 1]),
+    np.array([524 , 26 , 1]), np.array([161 , 24 , 1])
 ])
-
+print(ImgTipPoints)
+ImgShadowPoints = np.array([
+    np.array([156, 855, 1]), np.array([475, 921, 1]),
+    np.array([490, 70 , 1]), np.array([160, 58 , 1])
+])
+print(ImgShadowPoints)
+print(calibLampCalib.shape)
+calibLampCalib[ImgTipPoints[0][0], ImgTipPoints[0][1]] = 255
+calibLampCalib[ImgTipPoints[1][0], ImgTipPoints[1][1]] = 255
+calibLampCalib[ImgTipPoints[2][0], ImgTipPoints[2][1]] = 255
+calibLampCalib[ImgTipPoints[3][0], ImgTipPoints[3][1]] = 255
+#plt.imshow(calibLampCalib, cmap='gray')
+#plt.show()
+# USING Vlad'S STRATEGY AS SEEN IN https://stackoverflow.com/questions/22389896/finding-the-real-world-coordinates-of-an-image-point
+rvecs = rvecs[0].ravel()
+tvecs = tvecs[0].ravel()
+ObjTipPoints = []
+ObjShadowPoints = []
+for imgPoint in ImgTipPoints:
+    objPoint = getObjectPointFromImagePoint(imgPoint, rmat, tvecs, False, 70)
+    ObjTipPoints.append(objPoint)
+for imgPoint in ImgShadowPoints:
+    objPoint = getObjectPointFromImagePoint(imgPoint, rmat, tvecs, True)
+    ObjShadowPoints.append(objPoint)
+ObjTipPoints = np.array(ObjTipPoints)
+ObjShadowPoints = np.array(ObjShadowPoints)
+'''for imgPoint in ImgTipPoints:
+    objPoint = ((imgPoint * rvecs) + tvecs)
+    ObjTipPoints.append(objPoint)
+ObjTipPoints = np.array(ObjTipPoints)
+ObjShadowPoints = []
+for imgPoint in ImgShadowPoints:
+    objPoint = ((imgPoint* rvecs) + tvecs)
+    ObjShadowPoints.append(objPoint)'''
+'''ObjTipPoints = np.array([
+	np.array([ 231.69 , 397   ,700]),
+	np.array([ 295.08 , 667.29,700]),
+	np.array([-211.62 , 405.93,700]),
+	np.array([-220.34 , 667.35,700])
+])
+ObjShadowPoints = np.array([
+    np.array([ 241.51 , 471.29, 0]),
+	np.array([ 307.75 , 751.89, 0]),
+	np.array([-220.88 , 479.86, 0]),
+	np.array([ -230   , 752.71, 0])
+])'''
+ObjLines = np.array([
+    np.array([ObjShadowPoints[0], ObjTipPoints[0] - ObjShadowPoints[0]]),
+    np.array([ObjShadowPoints[1], ObjTipPoints[1] - ObjShadowPoints[1]]),
+    np.array([ObjShadowPoints[2], ObjTipPoints[2] - ObjShadowPoints[2]]),
+    np.array([ObjShadowPoints[3], ObjTipPoints[3] - ObjShadowPoints[3]])
+])
+print("obj shadow points: " + str(ObjShadowPoints))
+print("obj tip points: " + str(ObjTipPoints))
+print(invRvecs)
 # LIGHT CALIBRATION
 midpoints = []
 _, _, midpoint1, _ = closestDistanceBetweenLines(ObjTipPoints[0], ObjShadowPoints[0], ObjTipPoints[1], ObjShadowPoints[1])
@@ -319,16 +406,21 @@ lightCenterPoint = np.array([np.sum(midpoints[:, 0])/len(midpoints), np.sum(midp
 print(lightCenterPoint)
 
 # DEBUG PLOTTING
-ax = plt.axes(projection='3d')
-ax.plot3D([ObjTipPoints[0, 0], ObjShadowPoints[0, 0]], [ObjTipPoints[0, 1], ObjShadowPoints[0, 1]], [ObjTipPoints[0, 2], ObjShadowPoints[0, 2]], 'green')
-ax.plot3D([ObjTipPoints[1, 0], ObjShadowPoints[1, 0]], [ObjTipPoints[1, 1], ObjShadowPoints[1, 1]], [ObjTipPoints[1, 2], ObjShadowPoints[1, 2]], 'green')
-ax.plot3D([ObjTipPoints[2, 0], ObjShadowPoints[2, 0]], [ObjTipPoints[2, 1], ObjShadowPoints[2, 1]], [ObjTipPoints[2, 2], ObjShadowPoints[2, 2]], 'green')
-ax.plot3D([ObjTipPoints[3, 0], ObjShadowPoints[3, 0]], [ObjTipPoints[3, 1], ObjShadowPoints[3, 1]], [ObjTipPoints[3, 2], ObjShadowPoints[3, 2]], 'green')
+ax = plt.figure().add_subplot(projection='3d')
+ax.plot_surface(plotx, ploty, tb - tvecs[2])
+ax.scatter(tvecs[0], tvecs[1], tvecs[2], c='red')
+ax.plot3D([ObjTipPoints[0, 0], ObjShadowPoints[0, 0]],[ObjTipPoints[0, 1], ObjShadowPoints[0, 1]], [-ObjTipPoints[0, 2], ObjShadowPoints[0, 2]], 'green')
+ax.plot3D([ObjTipPoints[1, 0], ObjShadowPoints[1, 0]],[ObjTipPoints[1, 1], ObjShadowPoints[1, 1]], [-ObjTipPoints[1, 2], ObjShadowPoints[1, 2]], 'blue')
+ax.plot3D([ObjTipPoints[2, 0], ObjShadowPoints[2, 0]],[ObjTipPoints[2, 1], ObjShadowPoints[2, 1]], [-ObjTipPoints[2, 2], ObjShadowPoints[2, 2]], 'red')
+ax.plot3D([ObjTipPoints[3, 0], ObjShadowPoints[3, 0]],[ObjTipPoints[3, 1], ObjShadowPoints[3, 1]], [-ObjTipPoints[3, 2], ObjShadowPoints[3, 2]], 'yellow')
+#ax.plot3D([ObjShadowPoints[0][0], ObjTipPoints[0][0]], [ObjShadowPoints[0][1], ObjLines[0][1]], [ObjShadowPoints[0][2], ObjTipPoints[0][2]], 'green')
 ax.scatter(midpoint1[0], midpoint1[1], midpoint1[2], c= 'green')
 ax.scatter(midpoint2[0], midpoint2[1], midpoint2[2], c= 'green')
 ax.scatter(midpoint3[0], midpoint3[1], midpoint3[2], c= 'green')
 ax.scatter(midpoint4[0], midpoint4[1], midpoint4[2], c= 'green')
-ax.scatter(lightCenterPoint[0], lightCenterPoint[1], lightCenterPoint[2])
+ax.scatter(lightCenterPoint[0], lightCenterPoint[1], lightCenterPoint[2], c='blue')
+plt.xlabel('X-Axis')
+plt.ylabel('Y-Axis')
 plt.show()
 
 
@@ -345,12 +437,46 @@ cannyImgs = np.array(cannyImgs)
 # SPATIAL SHADOW LOCATION
 # DETECT SHADOW BEHAVIOUR ON PLANE
 # IF USING UNCALIBRATED IMAGES FOR CANNY, USE ytop AND ybottom
-# IF USING CALIBRATED IMAGES, USE int(h * (ytop//imgs[0].shape[0])) AND int(h * (ybottom//imgs[0].shape[0]))
-print(((str(h * (ytop//imgs[0].shape[0])))) + " " + str(h * (ybottom//imgs[0].shape[0])))
-spatial = spatialLocation(cannyImgs, int(h * (ytop/imgs[0].shape[0])), int(h * (ybottom/imgs[0].shape[0])))
-print(spatial)
+# IF USING CALIBRATED IMAGES, USE int(h * (ytop/imgs[0].shape[0])) AND int(h * (ybottom/imgs[0].shape[0]))
+ybottom = int(h * (ybottom/imgs[0].shape[0]))
+ytop = int(h * (ytop/imgs[0].shape[0]))
+spatial = []
+for i in range(calibImgs.shape[0] - 1):
+    spatial.append(cv.absdiff(calibImgs[i], calibImgs[i+1]))
+    #plt.imshow(spatial[i], cmap='gray')
+    #plt.show()
+
+spatialEdges = spatialLocation(cannyImgs, ytop, ybottom)
+print(spatialEdges)
 plt.imshow(cannyImgs[0], cmap='gray')
 plt.show()
+shadowPlanes = []
+for i, line in enumerate(spatialEdges):
+    print(line)
+    plane = getPlaneFromThreePoints(lightCenterPoint, np.array([ytop, line[0], 1.0]), np.array([ybottom, line[1], 1.0]))
+    print(plane)
+    shadowPlanes.append(plane)
+    '''x = np.linspace(-20, 20, 100)
+    y = np.linspace(-20, 20, 100)
+    x, y = np.meshgrid(x, y)
+    z = (plane[0][3] - plane[1][0] * x - plane[1][1] * y) / plane[1][2]
+    tb = np.array(invRvecs[0] * (x) + invRvecs[1] * (y)) #+ invRvecs[2]*(tvecs[0][2]))
+    plnPlot = plt.figure().gca(projection='3d')
+    #plnPlot.plot(*zip(np.array([ytop, line[0], 1.0]), np.array([ybottom, line[1], 1.0]), lightCenterPoint))
+    #plnPlot.plot3D([ytop, line[0]], [ybottom, line[1]])
+    plnPlot.plot3D([ObjTipPoints[0, 1], ObjShadowPoints[0, 1]], [ObjTipPoints[0, 0], ObjShadowPoints[0, 0]], [ObjTipPoints[0, 2], ObjShadowPoints[0, 2]], 'green')
+    plnPlot.plot3D([ObjTipPoints[1, 1], ObjShadowPoints[1, 1]], [ObjTipPoints[1, 0], ObjShadowPoints[1, 0]], [ObjTipPoints[1, 2], ObjShadowPoints[1, 2]], 'green')
+    plnPlot.plot3D([ObjTipPoints[2, 1], ObjShadowPoints[2, 1]], [ObjTipPoints[2, 0], ObjShadowPoints[2, 0]], [ObjTipPoints[2, 2], ObjShadowPoints[2, 2]], 'green')
+    plnPlot.plot3D([ObjTipPoints[3, 1], ObjShadowPoints[3, 1]], [ObjTipPoints[3, 0], ObjShadowPoints[3, 0]], [ObjTipPoints[3, 2], ObjShadowPoints[3, 2]], 'green')
+    plnPlot.scatter(lightCenterPoint[1], lightCenterPoint[0], lightCenterPoint[2])
+    plnPlot.plot_surface(x, y, z, cmap=plt.cm.coolwarm)
+    plnPlot.plot_surface(x, y, tb)
+    plt.xlabel("X axis")
+    plt.ylabel("Y axis")
+    plt.show()'''
+shadowPlanes = np.array(shadowPlanes)
+print(len(shadowPlanes))
+
 # NOT DONE YET
 # SHADOW PLANES MUST BE ESTIMATED
 # CAN ONLY BE DONE WHEN LIGHT CALIBRATION IS DONE
@@ -385,6 +511,7 @@ for i, times in enumerate(shadowTime):
     #if (i > 0):
     #    vertices += ", "
     for j, time in enumerate(times):
+        delta = shadowTime[i, j]
         vertices.append(j%calibImgs[0].shape[1])
         vertices.append(shadowTime[i, j])
         vertices.append(i)
@@ -393,6 +520,11 @@ entry = {"vertices": vertices}
 with open("mesh.json", "w") as write_file:
     json.dump(entry, write_file, cls=NumpyArrayEncoder)
 #vertices += ']'
+
+final = plt.axes(projection = '3d')
+final.scatter(tvecs[0], tvecs[1], tvecs[2], c='red')
+plt.text(zip(*tvecs)*1.1, s='camera', fontsize=12)
+plt.show()
 
 '''window3d = plt.figure(figsize=(7, 7))
 axes = plt.axes(projection="3d")
