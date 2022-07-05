@@ -591,7 +591,10 @@ if shadowPlanes.shape[0] >= spatialEdges.shape[0]:
 #Means not every edge was used to define shadow planes. Need to offset triangulation to compesate for the inequal number of resources.
 else:
     for i, edge in enumerate(shadowPlanes):
-        model = np.where(shadowTime == i, retrieveZCoordFromPointInPlane(shadowTime, shadowPlanes[i-1]), model)
+        if i == 0:
+            model = np.where(shadowTime == i, retrieveZCoordFromPointInPlane(shadowTime, shadowPlanes[i]), model)
+            continue
+        model = np.where(shadowTime == i, retrieveZCoordFromPointInPlane(shadowTime, shadowPlanes[i]), model)
 
 print(model)
 
