@@ -5,14 +5,9 @@ import os
 import cv2 as cv
 from cv2 import projectPoints
 from cv2 import CALIB_USE_INTRINSIC_GUESS
-from cv2.structured_light import GrayCodePattern
 import json
 import numpy
 import numpy as np
-import pytransform3d.visualizer as pv
-import pytransform3d.plot_utils as pp
-import pytransform3d.transformations as pts
-import pytransform3d.rotations as pr
 import matplotlib.pyplot as plt
 
 class NumpyArrayEncoder(json.JSONEncoder):
@@ -55,6 +50,15 @@ def getQuaternionFromRotationMatrix(rmat):
         Q[j] = rmat[j,i] + rmat[i,j] * s
         Q[k] = rmat[k,i] + rmat[i,k] * s
     return Q
+
+def getLinePlaneIntersection(line, plane):
+    '''Return the colinear point at which a given line intersects it
+       Line must be given in the format (point, direction vector)
+       Plane must be given in the format (a, b, c, d)
+       Not necessarily must be tuples
+    '''
+    t = (-1) * ((plane[3] + line[0][0]*plane[0] + line[0][1]*plane[1] + line[0][2]*plane[2])/(line[1][0]*plane[0] + line[1][1]*plane[1] + line[1][2]*plane[2]))
+    return line[0] + t * line[1]
 
 # GET CLOSEST DISTANCE BETWEEN LINES EXTENDING TO INFINITY AND BEYOND
 # FUNCTION BY Fnord ON STACK OVERFLOW: https://stackoverflow.com/questions/2824478/shortest-distance-between-two-line-segments
@@ -584,6 +588,7 @@ print(shadowTime[268, 836])
 model = np.zeros([calibImgs[0].shape[0], calibImgs[0].shape[1]], dtype=np.uint8)
 print(spatialEdges.shape)
 print(shadowPlanes.shape)
+
 # Means every edge was used to define shadow planes
 if shadowPlanes.shape[0] >= spatialEdges.shape[0]:
     for i, edge in enumerate(spatialEdges):
@@ -592,7 +597,7 @@ if shadowPlanes.shape[0] >= spatialEdges.shape[0]:
 else:
     for i, edge in enumerate(shadowPlanes):
         if i == 0:
-            model = np.where(shadowTime == i, retrieveZCoordFromPointInPlane(shadowTime, shadowPlanes[i]), model)
+            model = np.where(shadowTime == i, getLinePlaneIntersection()[2], model)
             continue
         model = np.where(shadowTime == i, retrieveZCoordFromPointInPlane(shadowTime, shadowPlanes[i]), model)
 
