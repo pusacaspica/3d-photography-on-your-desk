@@ -51,15 +51,6 @@ def getQuaternionFromRotationMatrix(rmat):
         Q[k] = rmat[k,i] + rmat[i,k] * s
     return Q
 
-def getLinePlaneIntersection(line, plane):
-    '''Return the colinear point at which a given line intersects it
-       Line must be given in the format (point, direction vector)
-       Plane must be given in the format (a, b, c, d)
-       Not necessarily must be tuples
-    '''
-    t = (-1) * ((plane[3] + line[0][0]*plane[0] + line[0][1]*plane[1] + line[0][2]*plane[2])/(line[1][0]*plane[0] + line[1][1]*plane[1] + line[1][2]*plane[2]))
-    return line[0] + t * line[1]
-
 # GET CLOSEST DISTANCE BETWEEN LINES EXTENDING TO INFINITY AND BEYOND
 # FUNCTION BY Fnord ON STACK OVERFLOW: https://stackoverflow.com/questions/2824478/shortest-distance-between-two-line-segments
 def closestDistanceBetweenLines(a0,a1,b0,b1,clampAll=False,clampA0=False,clampA1=False,clampB0=False,clampB1=False):
@@ -157,8 +148,23 @@ def closestDistanceBetweenLines(a0,a1,b0,b1,clampAll=False,clampA0=False,clampA1
     
     return pA,pB,midpoint,np.linalg.norm(pA-pB)
 
-def retrieveZCoordFromPointInPlane(point, plane):
-    return (-plane[0][3] - (plane[1][0]) * (point[0]) - (plane[1][1]) * (point[1])) / (plane[1][2])
+def getLinePlaneIntersection(line, plane):
+    '''Return the colinear point at which a given line intersects it
+       Line must be given in the format (point, direction vector)
+       Plane must be given in the format (a, b, c, d)
+       Not necessarily must be tuples
+    '''
+    t = (-1) * ((plane[3] + line[0][0]*plane[0] + line[0][1]*plane[1] + line[0][2]*plane[2])/(line[1][0]*plane[0] + line[1][1]*plane[1] + line[1][2]*plane[2]))
+    return line[0] + t * line[1]
+
+def getLinePlaneIntersection(line, plane):
+    '''Return the colinear point at which a given line intersects it
+       Line must be given in the format (point, direction vector)
+       Plane must be given in the format (a, b, c, d)
+       Not necessarily must be tuples
+    '''
+    t = (-1) * ((plane[3] + line[0][0]*plane[0] + line[0][1]*plane[1] + line[0][2]*plane[2])/(line[1][0]*plane[0] + line[1][1]*plane[1] + line[1][2]*plane[2]))
+    return line[0] + t * line[1]
 
 def getPlaneFromThreePoints(pt1, pt2, pt3, homogeneize=False):
     ''' Given three points defined by numpy.array triples (X, Y, Z)
@@ -184,18 +190,23 @@ def getPlaneFromThreePoints(pt1, pt2, pt3, homogeneize=False):
 # HEAVILY BASED ON Milo's EXPLANATION AT https://stackoverflow.com/questions/14514357/converting-a-2d-image-point-to-a-3d-world-point
 # AND https://stackoverflow.com/questions/32849373/how-do-i-obtain-the-camera-world-position-from-calibratecamera-results
 def getObjectPointFromImagePoint(imagePoint, optMtx, rvecs, tvecs, tabletop = False, height = 7000, scale = 100):
+    print("imagePoint: "+ str(imagePoint))
     img = np.dot(np.linalg.inv(optMtx), imagePoint)
     #print(img)
     extrinsic = np.append(np.linalg.inv(rvecs), -tvecs).reshape(4, 3)
     #print("extrinsic: "+str(extrinsic))
     #print("imgpoint: "+str(imagePoint))
     result = np.dot(extrinsic , img)
-    result /= result[3]
+    print("result:" + str(result))
+    result[0] = np.divide(result[0], result[3])
+    result[1] = np.divide(result[1], result[3])
+    result[2] = np.divide(result[2], result[3])
+    result[3] = np.divide(result[3], result[3])
     #print("result:" + str(result))
     if (tabletop == True):
-        return np.array([result[0], result[1], result[2]]) * np.array([scale, scale, 0])
+        return np.multiply(np.array([result[0], result[1], 0]), scale)
     else:
-        return np.array([result[0], result[1], result[2]]) * np.array([scale, scale, 0]) + np.array([0, 0, height])
+        return np.multiply(np.array([result[0], result[1], height]) , scale)
 
 # GET COLOR MAGNITUDE FROM PIXEL
 def getColorMagnitude(pixel):
@@ -584,22 +595,35 @@ print(shadowTime[268, 836])
 #plt.imshow(spatial[34], cmap='gray')
 #plt.show()
 
+# DEFINE WORLD CAMERA POSITION
+cameraPosition = tvec
+print(cameraPosition)
+
 # TRIANGULATE POINTS
 model = np.zeros([calibImgs[0].shape[0], calibImgs[0].shape[1]], dtype=np.uint8)
 print(spatialEdges.shape)
 print(shadowPlanes.shape)
-
 # Means every edge was used to define shadow planes
 if shadowPlanes.shape[0] >= spatialEdges.shape[0]:
     for i, edge in enumerate(spatialEdges):
-        model = np.where(shadowTime == i, retrieveZCoordFromPointInPlane(shadowTime, shadowPlanes[i-1]), model)
+        if i == 0:
+            continue
+        #print(cameraPosition - np.array([np.where(shadowTime==i)[1], 1]))
+        model = np.where(shadowTime == i, getLinePlaneIntersection((cameraPosition, cameraPosition - getObjectPointFromImagePoint(np.array([np.where(shadowTime==i)[0], np.where(shadowTime==i)[1], 1]), optMtx, rmat, tvec, True)), shadowPlanes[i][0])[2], model)
 #Means not every edge was used to define shadow planes. Need to offset triangulation to compesate for the inequal number of resources.
 else:
     for i, edge in enumerate(shadowPlanes):
         if i == 0:
-            model = np.where(shadowTime == i, getLinePlaneIntersection()[2], model)
+        #    print(cameraPosition - np.array([np.where(shadowTime==i)[1], 1]))
+        #    model = np.where(shadowTime == i, getLinePlaneIntersection((cameraPosition, cameraPosition - getObjectPointFromImagePoint(np.array([np.where(shadowTime==i)]), optMtx, rmat, tvec, True)), shadowPlanes[i][0])[2], model)
             continue
-        model = np.where(shadowTime == i, retrieveZCoordFromPointInPlane(shadowTime, shadowPlanes[i]), model)
+        #print(np.array([np.where(shadowTime==30), 1]))
+        new = np.insert(np.where(shadowTime==i),2, np.ones(np.array(np.where(shadowTime==i)).shape[1]), axis=0)
+        print("OLD: "+str(np.array(np.where(shadowTime==i))))
+        print("SHAPE: "+str(np.array(np.where(shadowTime==i)).shape))
+        print("NEW: "+str(new))
+        print("NEW SHAPE: "+str(new.shape))
+        model = np.where(shadowTime == i, getLinePlaneIntersection((cameraPosition, np.subtract(cameraPosition, getObjectPointFromImagePoint(np.array([np.where(shadowTime==i), 1]), optMtx, rmat, tvec, True))), shadowPlanes[i][0])[2], model)
 
 print(model)
 
