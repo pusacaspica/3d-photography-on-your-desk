@@ -155,16 +155,11 @@ def getLinePlaneIntersection(line, plane):
        Not necessarily must be tuples
     '''
     t = (-1) * ((plane[3] + line[0][0]*plane[0] + line[0][1]*plane[1] + line[0][2]*plane[2])/(line[1][0]*plane[0] + line[1][1]*plane[1] + line[1][2]*plane[2]))
-    return line[0] + t * line[1]
-
-def getLinePlaneIntersection(line, plane):
-    '''Return the colinear point at which a given line intersects it
-       Line must be given in the format (point, direction vector)
-       Plane must be given in the format (a, b, c, d)
-       Not necessarily must be tuples
-    '''
-    t = (-1) * ((plane[3] + line[0][0]*plane[0] + line[0][1]*plane[1] + line[0][2]*plane[2])/(line[1][0]*plane[0] + line[1][1]*plane[1] + line[1][2]*plane[2]))
-    return line[0] + t * line[1]
+    #print("t: "+str(t.T))
+    #print("line[0]: "+str(line[0]))
+    #print("line[1]: "+str(line[1]))
+    #print("result: " + str(line[0][2] + np.multiply(t.T[2], line[1])))
+    return line[0][2] + np.multiply(t.T[2], line[1])
 
 def getPlaneFromThreePoints(pt1, pt2, pt3, homogeneize=False):
     ''' Given three points defined by numpy.array triples (X, Y, Z)
@@ -191,22 +186,35 @@ def getPlaneFromThreePoints(pt1, pt2, pt3, homogeneize=False):
 # AND https://stackoverflow.com/questions/32849373/how-do-i-obtain-the-camera-world-position-from-calibratecamera-results
 def getObjectPointFromImagePoint(imagePoint, optMtx, rvecs, tvecs, tabletop = False, height = 7000, scale = 100):
     print("imagePoint: "+ str(imagePoint))
-    img = np.dot(np.linalg.inv(optMtx), imagePoint)
+    img = np.dot(np.linalg.inv(optMtx), np.array([imagePoint[0], imagePoint[1], imagePoint[2]]))
     #print(img)
     extrinsic = np.append(np.linalg.inv(rvecs), -tvecs).reshape(4, 3)
     #print("extrinsic: "+str(extrinsic))
     #print("imgpoint: "+str(imagePoint))
     result = np.dot(extrinsic , img)
-    print("result:" + str(result))
+    #print("result:" + str(result))
     result[0] = np.divide(result[0], result[3])
     result[1] = np.divide(result[1], result[3])
     result[2] = np.divide(result[2], result[3])
     result[3] = np.divide(result[3], result[3])
-    #print("result:" + str(result))
+    print("result:" + str(result.shape))
     if (tabletop == True):
-        return np.multiply(np.array([result[0], result[1], 0]), scale)
+        if(len(result.shape) > 1):
+            depth = np.full([result.shape[1], 1], 0)
+            ret = np.multiply([result[0].ravel(), result[1].ravel(), depth.T.ravel()], scale)
+            ret = np.transpose(np.array(ret))
+        else:
+            ret = np.multiply([result[0], result[1], 0], scale)
+        print("ret: "+str(ret))
+        return ret
     else:
-        return np.multiply(np.array([result[0], result[1], height]) , scale)
+        if(len(result.shape) > 1):
+            depth = np.full([result.shape[1], 1], height)
+            ret = np.multiply([result[0], result[1], depth.T], scale)
+        else:
+            ret = np.multiply([result[0], result[1], height], scale)
+        return ret
+
 
 # GET COLOR MAGNITUDE FROM PIXEL
 def getColorMagnitude(pixel):
@@ -609,7 +617,8 @@ if shadowPlanes.shape[0] >= spatialEdges.shape[0]:
         if i == 0:
             continue
         #print(cameraPosition - np.array([np.where(shadowTime==i)[1], 1]))
-        model = np.where(shadowTime == i, getLinePlaneIntersection((cameraPosition, cameraPosition - getObjectPointFromImagePoint(np.array([np.where(shadowTime==i)[0], np.where(shadowTime==i)[1], 1]), optMtx, rmat, tvec, True)), shadowPlanes[i][0])[2], model)
+        new = np.insert(np.where(shadowTime==i),2, np.ones(np.array(np.where(shadowTime==i)).shape[1]), axis=0)
+        model = np.where(shadowTime == i, getLinePlaneIntersection((cameraPosition, np.subtract(cameraPosition.T, getObjectPointFromImagePoint(new, optMtx, rmat, tvec, True)).T), shadowPlanes[i][0]).T[2], model)
 #Means not every edge was used to define shadow planes. Need to offset triangulation to compesate for the inequal number of resources.
 else:
     for i, edge in enumerate(shadowPlanes):
@@ -618,12 +627,29 @@ else:
         #    model = np.where(shadowTime == i, getLinePlaneIntersection((cameraPosition, cameraPosition - getObjectPointFromImagePoint(np.array([np.where(shadowTime==i)]), optMtx, rmat, tvec, True)), shadowPlanes[i][0])[2], model)
             continue
         #print(np.array([np.where(shadowTime==30), 1]))
-        new = np.insert(np.where(shadowTime==i),2, np.ones(np.array(np.where(shadowTime==i)).shape[1]), axis=0)
-        print("OLD: "+str(np.array(np.where(shadowTime==i))))
-        print("SHAPE: "+str(np.array(np.where(shadowTime==i)).shape))
-        print("NEW: "+str(new))
-        print("NEW SHAPE: "+str(new.shape))
-        model = np.where(shadowTime == i, getLinePlaneIntersection((cameraPosition, np.subtract(cameraPosition, getObjectPointFromImagePoint(np.array([np.where(shadowTime==i), 1]), optMtx, rmat, tvec, True))), shadowPlanes[i][0])[2], model)
+        new = np.insert(np.where(shadowTime==i), 2, np.ones(np.array(np.where(shadowTime==i)).shape[1]), axis=0)
+        print("intersec: "+str(getLinePlaneIntersection((cameraPosition, np.subtract(cameraPosition.T, getObjectPointFromImagePoint(new, optMtx, rmat, tvec, True)).T), shadowPlanes[i][0]).shape))
+        #print("OLD: "+str(np.array(np.where(shadowTime==i))))
+        #print("SHAPE: "+str(np.array(np.where(shadowTime==i)).shape))
+        #print("NEW: "+str(new))
+        #print("NEW IN WORLD: "+str((getObjectPointFromImagePoint(new, optMtx, rmat,tvec, True))))
+        #print("SHAPE OF NEW IN WORLD: "+str(np.array(getObjectPointFromImagePoint(new, optMtx, rmat,tvec, True)).shape))
+        print(new)
+        sliceInObj = getObjectPointFromImagePoint(new, optMtx, rmat, tvec, True)
+        print("sliceInObj: "+str(sliceInObj))
+        line = np.array([cameraPosition, np.subtract(cameraPosition.T, sliceInObj)])
+        print("line: "+str(line))
+        intersectionPoint = getLinePlaneIntersection(line, shadowPlanes[i][0])[2]
+        print("intersectionPoint: "+str((intersectionPoint)))
+        model = np.add(model, np.where(shadowTime==i, intersectionPoint[0], 0)*i)
+
+        final = plt.axes(projection = '3d')
+        x = np.linspace(0, calibImgs[0].shape[1], calibImgs[0].shape[0])
+        y = np.linspace(0, calibImgs[0].shape[1], calibImgs[0].shape[1])
+        x, y = np.meshgrid(y, x)
+        z = model
+        final.plot_surface(x, y, z, cmap=plt.cm.coolwarm)
+        plt.show()
 
 print(model)
 
