@@ -20,7 +20,7 @@ def getQuaternionFromRotationMatrix(rmat):
     '''Converts opecv's rotation matrix got from cv.Rodrigues to quaternion array
        Function adapted from https://gist.github.com/shubh-agrawal/76754b9bfb0f4143819dbd146d15d4c8'''
     Q = np.zeros((1, 4)).ravel()
-    print(Q)
+    #print(Q)
     trace = np.trace(rmat)
     if(trace > 0):
         s = np.sqrt(trace + 1)
@@ -53,7 +53,7 @@ def getQuaternionFromRotationMatrix(rmat):
 
 def distanceOfPointAndLine(pt, ln):
     '''Given a point and a line, return distance between them and vector of distance'''
-    return np.abs(np.cross(ln[1] - ln[0], ln[0] - pt))/np.linalg.norm(ln[1] - ln[0]), np.abs(np.linalg.norm(np.cross(ln[1] - ln[0], ln[0] - pt)))/np.linalg.norm(ln[1] - ln[0])
+    return np.abs(np.cross(ln[1] - ln[0], ln[0] - pt))/np.linalg.norm(ln[1] - ln[0]), (np.abs(np.linalg.norm(np.cross(ln[1] - ln[0], ln[0] - pt)))/np.linalg.norm(ln[1] - ln[0]))
 
 # GET CLOSEST DISTANCE BETWEEN LINES EXTENDING TO INFINITY AND BEYOND
 # FUNCTION BY Fnord ON STACK OVERFLOW: https://stackoverflow.com/questions/2824478/shortest-distance-between-two-line-segments
@@ -158,7 +158,7 @@ def getLinePlaneIntersection(line, plane):
        Plane must be given in the format (a, b, c, d)
        Not necessarily must be tuples
     '''
-    t = (-1) * ((plane[3] + line[0][0]*plane[0] + line[0][1]*plane[1] + line[0][2]*plane[2])/(line[1][0]*plane[0] + line[1][1]*plane[1] + line[1][2]*plane[2]))
+    t = (-1) * ((plane[3] + line[0][0]*plane[0] + line[0][1]*plane[1] + line[0][2]*plane[2])/(line[1][0][0]*plane[0] + line[1][0][1]*plane[1] + line[1][0][2]*plane[2]))
     #print("t: "+str(t.T))
     #print("line[0]: "+str(line[0]))
     #print("line[1]: "+str(line[1]))
@@ -189,8 +189,8 @@ def getPlaneFromThreePoints(pt1, pt2, pt3, homogeneize=False):
 # HEAVILY BASED ON Milo's EXPLANATION AT https://stackoverflow.com/questions/14514357/converting-a-2d-image-point-to-a-3d-world-point
 # AND https://stackoverflow.com/questions/32849373/how-do-i-obtain-the-camera-world-position-from-calibratecamera-results
 def getObjectPointFromImagePoint(imagePoint, optMtx, rvecs, tvecs, tabletop = False, height = 7000, scale = 100):
-    print("imagePoint: "+ str(imagePoint))
-    img = np.dot(np.linalg.inv(optMtx), np.array([imagePoint[0], imagePoint[1], imagePoint[2]]))
+    #print("imagePoint: "+ str(imagePoint))
+    img = np.dot(np.linalg.inv(optMtx), scale*np.array([imagePoint[0], imagePoint[1], 1]))
     #print(img)
     extrinsic = np.append(np.linalg.inv(rvecs), -tvecs).reshape(4, 3)
     #print("extrinsic: "+str(extrinsic))
@@ -201,7 +201,7 @@ def getObjectPointFromImagePoint(imagePoint, optMtx, rvecs, tvecs, tabletop = Fa
     result[1] = np.divide(result[1], result[3])
     result[2] = np.divide(result[2], result[3])
     result[3] = np.divide(result[3], result[3])
-    print("result:" + str(result.shape))
+    #print("result:" + str(result.shape))
     if (tabletop == True):
         if(len(result.shape) > 1):
             depth = np.full([result.shape[1], 1], 0)
@@ -209,7 +209,7 @@ def getObjectPointFromImagePoint(imagePoint, optMtx, rvecs, tvecs, tabletop = Fa
             ret = np.transpose(np.array(ret))
         else:
             ret = np.multiply([result[0], result[1], 0], scale)
-        print("ret: "+str(ret))
+        #print("ret: "+str(ret))
         return ret
     else:
         if(len(result.shape) > 1):
@@ -255,15 +255,23 @@ def optDeltas(imgs):
     deltas = np.ndarray((imgs.shape[0], imgs[0].shape[0], imgs[0].shape[1]))
     for i, img in enumerate(imgs):
         deltas[i, 0:img.shape[0], 0:img.shape[1]] = (imgs[i, 0:img.shape[0], 0:img.shape[1]] - (optShadow(imgs)))
+        #plt.imshow(deltas[i], cmap='gray')
+    ret = optMax(deltas)[0]
+    #plt.imshow(ret)
+    #plt.title("optMax(Deltas)")
+    #plt.show()
     return optMax(deltas)
     
 # GIVEN A SET OF CONTOUR IMAGES
 # AND A PAIR OF TOP AND BOTTOM Y POSITIONS
 # WHERE, IN THE X-AXIS, IS LOCATED THE SHADOW EDGE?
-def spatialLocation(imgs, ytop, ybottom):
-    spatial = []
+def spatialLocation(imgs, ytop, ybottom, optMtx, rmat, tvec):
+    spatialImg = []
+    spatialObj = []
     top = int(ytop)
     bot = int(ybottom)
+    objTop = getObjectPointFromImagePoint(np.array([ytop, 0, 1]), optMtx, rmat, tvec, True)[0]
+    objBot = getObjectPointFromImagePoint(np.array([ybottom, 0, 1]), optMtx, rmat, tvec, True)[0]
     for img in imgs:
         if(np.nonzero(img[top])[0].size < 2):
             topContour = -1
@@ -273,12 +281,13 @@ def spatialLocation(imgs, ytop, ybottom):
             bottomContour = -1
         else:
             bottomContour = np.nonzero(img[bot])[0].ravel()[0]
-        spatial.append((topContour, bottomContour))
-    return spatial
+        spatialObj.append((getObjectPointFromImagePoint(np.array([ytop, topContour, 1]), optMtx, rmat, tvec, True), getObjectPointFromImagePoint(np.array([ybottom, bottomContour, 1]), optMtx, rmat, tvec, True)))
+        spatialImg.append((topContour, bottomContour))
+    return spatialImg, spatialObj
 
 def optShadowTime(imgs, deltas, thresh):
     ret = np.zeros((imgs[0].shape[0], imgs[0].shape[1]))
-    ret = np.where(optMax(imgs)[0] - optMin(imgs)[0] > 30, np.where(deltas[0] > thresh, deltas[1] + 1, -1), -1)
+    ret = np.where(optMax(imgs)[0] - optMin(imgs)[0] > thresh, deltas[1], -1)
     return ret
 
 # PROGRAM START
@@ -516,8 +525,9 @@ for i in range(calibImgs.shape[0] - 1):
     #plt.imshow(spatial[i], cmap='gray')
     #plt.show()
 
-spatialEdges = np.array(spatialLocation(cannyImgs, ytop, ybottom))
-#print(spatialEdges)
+spatialEdges, objSpatialEdges = np.array(spatialLocation(cannyImgs, ytop, ybottom, optMtx, rmat, tvec))
+print("Shadow passing through: "+str(spatialEdges))
+print("Shadow passing through in obj space: "+str(objSpatialEdges))
 #plt.imshow(cannyImgs[0], cmap='gray')
 #plt.show()
 objShadowLine = []
@@ -603,7 +613,7 @@ deltas = optDeltas(calibImgs)
 # DETECT TIMESLICE IN WHICH FRAME IS TOUCHED BY MOVING SHADOW
 shadowTime = optShadowTime(calibImgs, deltas, thresh)
 
-print(shadowTime[268, 836])
+#print(shadowTime[268, 836])
 #plt.imshow(spatial[34], cmap='gray')
 #plt.show()
 
@@ -616,45 +626,56 @@ model = np.zeros([calibImgs[0].shape[0], calibImgs[0].shape[1]], dtype=np.uint8)
 print(spatialEdges.shape)
 print(shadowPlanes.shape)
 print(np.max(shadowTime))
-# Means every edge was used to define shadow planes
-if shadowPlanes.shape[0] > spatialEdges.shape[0]:
-    for i, edge in enumerate(spatialEdges):
-        if i == 0:
-            continue
-        #print(cameraPosition - np.array([np.where(shadowTime==i)[1], 1]))
-        new = np.insert(np.where(shadowTime==i),2, np.ones(np.array(np.where(shadowTime==i)).shape[1]), axis=0)
-        model = np.where(shadowTime == i, getLinePlaneIntersection((cameraPosition, np.subtract(cameraPosition.T, getObjectPointFromImagePoint(new, optMtx, rmat, tvec, True)).T), shadowPlanes[i][0]).T[2], model)
-#Means not every edge was used to define shadow planes. Need to offset triangulation to compesate for the inequal number of resources.
-else:
-    for i, edge in enumerate(range(np.max(shadowTime))):
-        if i == 0:
-        #    print(cameraPosition - np.array([np.where(shadowTime==i)[1], 1]))
-        #    model = np.where(shadowTime == i, getLinePlaneIntersection((cameraPosition, cameraPosition - getObjectPointFromImagePoint(np.array([np.where(shadowTime==i)]), optMtx, rmat, tvec, True)), shadowPlanes[i][0])[2], model)
-            continue
-        #print(np.array([np.where(shadowTime==30), 1]))
-        new = np.insert(np.where(shadowTime==i), 2, np.ones(np.array(np.where(shadowTime==i)).shape[1]), axis=0)
-        print("intersec: "+str(getLinePlaneIntersection((cameraPosition, np.subtract(cameraPosition.T, getObjectPointFromImagePoint(new, optMtx, rmat, tvec, True)).T), shadowPlanes[i][0]).shape))
-        #print("OLD: "+str(np.array(np.where(shadowTime==i))))
-        #print("SHAPE: "+str(np.array(np.where(shadowTime==i)).shape))
-        #print("NEW: "+str(new))
-        #print("NEW IN WORLD: "+str((getObjectPointFromImagePoint(new, optMtx, rmat,tvec, True))))
-        #print("SHAPE OF NEW IN WORLD: "+str(np.array(getObjectPointFromImagePoint(new, optMtx, rmat,tvec, True)).shape))
-        print(new)
-        sliceInObj = getObjectPointFromImagePoint(new, optMtx, rmat, tvec, True)
-        print("sliceInObj: "+str(sliceInObj))
-        line = np.array([cameraPosition, np.subtract(cameraPosition.T, sliceInObj)])
-        print("line: "+str(line))
-        intersectionPoint = getLinePlaneIntersection(line, shadowPlanes[i][0])[2]
-        print("intersectionPoint: "+str((intersectionPoint)))
-        model = np.add(model, np.where(shadowTime==i, intersectionPoint[2], 0))
+#plt.imshow(shadowTime)
+#plt.show()
+for i in (range(int(np.max(shadowTime)))):
+    print("Started "+ str(i)+" loop")
+    if i == 0:
+    #    print(cameraPosition - np.array([np.where(shadowTime==i)[1], 1]))
+    #    model = np.where(shadowTime == i, getLinePlaneIntersection((cameraPosition, cameraPosition - getObjectPointFromImagePoint(np.array([np.where(shadowTime==i)]), optMtx, rmat, tvec, True)), shadowPlanes[i][0])[2], model)
+        continue
+    #print(np.array([np.where(shadowTime==30), 1]))
+    slice = np.where(shadowTime==i)
+    if len(slice) == 0 :
+        continue
+    #print("slice "+str(np.transpose(np.array(slice))))
+    zero = calibImgs[0][slice[0:2]]
+    #print("zero "+str(zero))
+    new = np.insert(np.where(shadowTime==i), 2, np.ones(np.array(np.where(shadowTime==i)).shape[1]), axis=0)
+    #print("intersec: "+str(getLinePlaneIntersection((cameraPosition, np.subtract(cameraPosition.T, getObjectPointFromImagePoint(new, optMtx, rmat, tvec, True)).T), shadowPlanes[i][0]).shape))
+    #print("OLD: "+str(np.array(np.where(shadowTime==i))))
+    #print("SHAPE: "+str(np.array(np.where(shadowTime==i)).shape))
+    #print("NEW: "+str(new))
+    #print("NEW IN WORLD: "+str((getObjectPointFromImagePoint(new, optMtx, rmat,tvec, True))))
+    #print("SHAPE OF NEW IN WORLD: "+str(np.array(getObjectPointFromImagePoint(new, optMtx, rmat,tvec, True)).shape))
+    #print(new)
+    sliceInObj = getObjectPointFromImagePoint(new, optMtx, rmat, tvec, True)
+    #print("sliceInObj: "+str(sliceInObj))
+    line = np.array([cameraPosition, np.subtract(cameraPosition.T, sliceInObj)])
+    #print("line: "+str(line))
+    intersectionPoint = getLinePlaneIntersection(line, shadowPlanes[i][0])
+    zpoint, zdist = distanceOfPointAndLine(intersectionPoint, objSpatialEdges[i])
+    #print(str(np.array(intersectionPoint-zpoint).T[2]))
+    zAxis = np.array(intersectionPoint - zpoint)
+    zAxisInput = np.transpose(zAxis)[2].ravel()
+    print(zAxisInput)
+    print(zAxisInput[0])
+    model[slice[0: 2]]= zAxisInput[0] - deltas[0][slice[0: 2]] #np.add(model, np.where(shadowTime==i,(intersectionPoint-zpoint).T[2].reshape(np.array(slice).shape), 0))
+    '''final = plt.axes(projection = '3d')
+    x = np.linspace(0, calibImgs[0].shape[1], calibImgs[0].shape[0])
+    y = np.linspace(0, calibImgs[0].shape[1], calibImgs[0].shape[1])
+    x, y = np.meshgrid(y, x)
+    z = model
+    final.plot_surface(x, y, z, cmap=plt.cm.coolwarm)
+    plt.show()'''
 
-        '''final = plt.axes(projection = '3d')
-        x = np.linspace(0, calibImgs[0].shape[1], calibImgs[0].shape[0])
-        y = np.linspace(0, calibImgs[0].shape[1], calibImgs[0].shape[1])
-        x, y = np.meshgrid(y, x)
-        z = model
-        final.plot_surface(x, y, z, cmap=plt.cm.coolwarm)
-        plt.show()'''
+# MEDIAN FILTER IN ORDER TO MAKE THE FINAL RESULT LESS NOISY
+# KERNEL SIZE WILL BE HARDCODED TO 5
+kernelsize = 9
+filter = np.zeros(model.shape)
+for i in range(len(model)-(kernelsize-1)):
+    for j in range(len(model[i])-(kernelsize-1)):
+        model[i, j] = np.median(model[i:i+kernelsize, j:j+kernelsize])
 
 print(model)
 
