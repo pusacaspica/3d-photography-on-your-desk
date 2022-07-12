@@ -159,7 +159,7 @@ def getLinePlaneIntersection(line, plane):
        Not necessarily must be tuples
     '''
     t = (-1) * ((plane[3] + line[0][0]*plane[0] + line[0][1]*plane[1] + line[0][2]*plane[2])/(line[1][0][0]*plane[0] + line[1][0][1]*plane[1] + line[1][0][2]*plane[2]))
-    #print("t: "+str(t.T))
+    #print("t: "+str(t.T[2]))
     #print(plane)
     #print(line)
     #print("line[0]: "+str(line[0]))
@@ -289,7 +289,7 @@ def spatialLocation(imgs, ytop, ybottom, optMtx, rmat, tvec):
 
 def optShadowTime(imgs, deltas, thresh):
     ret = np.zeros((imgs[0].shape[0], imgs[0].shape[1]))
-    ret = np.where(optMax(imgs)[0] - optMin(imgs)[0] > thresh, deltas[1], -1)
+    ret = np.where(optMax(imgs)[0] - optMin(imgs)[0] > thresh, deltas[1], 0)
     return ret
 
 # PROGRAM START
@@ -301,8 +301,8 @@ ytop = int(input('enter ytop: '))
 ybottom = int(input('enter ybottom: '))
 thresh = int(input('enter contrast threshold: '))
 kernelsize = int(input('enter kernel size: '))
-scale = int(input('enter scale (in milimeters times 10, how long is the camera calibration side; default = 100): '))
-objLength = int(input('enter object length (in milimeters times 100, how long is the camera calibration side; default = 7000): '))
+scale = int(input('enter scale (in milimeters times 10, how long is the camera calibration pattern side; default = 80): '))
+objLength = int(input('enter object length (in milimeters times 100, how long is the lamp calibration object length; default = 70): '))
 
 # READING FILES IN PATH
 for files in os.scandir(the_path):
@@ -626,66 +626,29 @@ deltas = optDeltas(calibImgs)
 shadowTime = optShadowTime(calibImgs, deltas, thresh)
 print("temporal shadow mapping is done!")
 
-#print(shadowTime[268, 836])
-#plt.imshow(spatial[34], cmap='gray')
-#plt.show()
-
 # DEFINE WORLD CAMERA POSITION
 cameraPosition = tvec
 #print(cameraPosition)
 
 # TRIANGULATE POINTS
 model = np.zeros([calibImgs[0].shape[0], calibImgs[0].shape[1]], dtype=np.uint8)
-#print(spatialEdges.shape)
-#print(shadowPlanes.shape)
-#print(np.max(shadowTime))
-#plt.imshow(shadowTime)
-#plt.show()
 
 #print(cameraPosition.T)
 for i in (range(int(np.max(shadowTime)))):
-    #print("Started "+ str(i)+" loop")
-    #print("Shadow Plane: "+ str(shadowPlanes[i]))
     if i == 0:
-    #    print(cameraPosition - np.array([np.where(shadowTime==i)[1], 1]))
-    #    model = np.where(shadowTime == i, getLinePlaneIntersection((cameraPosition, cameraPosition - getObjectPointFromImagePoint(np.array([np.where(shadowTime==i)]), optMtx, rmat, tvec, True)), shadowPlanes[i][0])[2], model)
         continue
-    #print(np.array([np.where(shadowTime==30), 1]))
     slice = np.where(shadowTime==i)
-    #print("slice before np.array: "+ str(slice))
-    if len(slice[0]) == 0 or len(slice[1]) == 0:
+    if len(slice) == 0:
         continue
-    #print("slice "+str(np.transpose(np.array(slice))))
     zero = calibImgs[0][slice[0:2]]
-    #print("zero "+str(zero))
     new = np.insert(np.where(shadowTime==i), 2, np.ones(np.array(np.where(shadowTime==i)).shape[1]), axis=0)
-    #print("intersec: "+str(getLinePlaneIntersection((cameraPosition, np.subtract(cameraPosition.T, getObjectPointFromImagePoint(new, optMtx, rmat, tvec, True)).T), shadowPlanes[i][0]).shape))
-    #print("OLD: "+str(np.array(np.where(shadowTime==i))))
-    #print("SHAPE: "+str(np.array(np.where(shadowTime==i)).shape))
-    #print("NEW: "+str(new))
-    #print("NEW IN WORLD: "+str((getObjectPointFromImagePoint(new, optMtx, rmat,tvec, True))))
-    #print("SHAPE OF NEW IN WORLD: "+str(np.array(getObjectPointFromImagePoint(new, optMtx, rmat,tvec, True)).shape))
-    #print(new)
     sliceInObj = getObjectPointFromImagePoint(new, optMtx, rmat, tvec, True, scale=scale)
-    #print("sliceInObj: "+str(sliceInObj))
     line = np.array([cameraPosition, np.subtract(cameraPosition.T, sliceInObj)])
-    #print("line: "+str(line))
     intersectionPoint = getLinePlaneIntersection(line, shadowPlanes[i][0])
-    #print("intersectionPoint: "+str(intersectionPoint))
     zpoint, zdist = distanceOfPointAndLine(intersectionPoint, objSpatialEdges[i])
-    #print(str(np.array(intersectionPoint-zpoint).T[2]))
     zAxis = np.array(intersectionPoint - zpoint)
-    zAxisInput = np.transpose(zAxis)[2].ravel()
-    #print(zAxisInput)
-    #print(zAxisInput[0])
-    model[slice[0: 2]]= zAxisInput[0] - deltas[0][slice[0: 2]] #np.add(model, np.where(shadowTime==i,(intersectionPoint-zpoint).T[2].reshape(np.array(slice).shape), 0))
-    '''final = plt.axes(projection = '3d')
-    x = np.linspace(0, calibImgs[0].shape[1], calibImgs[0].shape[0])
-    y = np.linspace(0, calibImgs[0].shape[1], calibImgs[0].shape[1])
-    x, y = np.meshgrid(y, x)
-    z = model
-    final.plot_surface(x, y, z, cmap=plt.cm.coolwarm)
-    plt.show()'''
+    zAxisInput = np.transpose(zAxis)[2]#.ravel()
+    model[slice[0: 2]]= zAxisInput[0] - deltas[0][slice[0: 2]]
 print("Triangulation done!")
 
 # MEDIAN FILTER IN ORDER TO MAKE THE FINAL RESULT LESS NOISY
@@ -697,7 +660,6 @@ print("Filter applied!")
 
 # SHOW IMAGES
 window = plt.figure(figsize=(4,4))
-# print(str(shadows.shape) + " " + str(deltas[0].shape))
 window.add_subplot(221)
 plt.title("Shadow image")
 plt.imshow(shadows, cmap='gray')
@@ -734,7 +696,7 @@ x = np.linspace(0, calibImgs[0].shape[1], calibImgs[0].shape[0])
 y = np.linspace(0, calibImgs[0].shape[0], calibImgs[0].shape[1])
 x, y = np.meshgrid(y, x)
 z = model
-final.plot_surface(x, y, z, cmap=plt.cm.coolwarm)
+final.plot_surface(y, x, z, cmap=plt.cm.coolwarm)
 plt.show()
 
 print("happy ending!")
