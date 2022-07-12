@@ -301,8 +301,8 @@ ytop = int(input('enter ytop: '))
 ybottom = int(input('enter ybottom: '))
 thresh = int(input('enter contrast threshold: '))
 kernelsize = int(input('enter kernel size: '))
-scale = int(input('enter scale (in milimeters times 10, how long is the camera calibration pattern side; default = 80): '))
-objLength = int(input('enter object length (in milimeters times 100, how long is the lamp calibration object length; default = 70): '))
+scale = int(input('enter scale (in milimeters, how long is the camera calibration pattern side; default = 80): '))
+objLength = int(input('enter object length (in milimeters, how long is the lamp calibration object length; default = 70): '))
 
 # READING FILES IN PATH
 for files in os.scandir(the_path):
